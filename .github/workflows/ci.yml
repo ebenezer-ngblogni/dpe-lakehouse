@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Une seule exécution par branche : annuler les précédentes évite d'accumuler
+# des builds obsolètes sur les runners.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Ingestion (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Installer les dépendances
+        run: pip install -r ingestion/requirements-dev.txt
+
+      - name: Style
+        run: ruff check ingestion
+
+      - name: Tests
+        run: pytest ingestion -q
+        env:
+          PYTHONPATH: ingestion
+
+  scala:
+    name: Jobs Spark (Scala)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: sbt
+
+      - uses: sbt/setup-sbt@v1
+
+      - name: Tests unitaires
+        working-directory: spark-jobs
+        run: sbt -batch test
+
+      - name: Construction du jar
+        working-directory: spark-jobs
+        run: sbt -batch assembly
+
+      - name: Publier le jar comme artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dpe-spark-jobs
+          path: spark-jobs/target/scala-2.12/dpe-spark-jobs.jar
+          retention-days: 7
+
+  dbt:
+    name: Modèles dbt
+    runs-on: ubuntu-latest
+    # Un vrai PostgreSQL plutôt qu'un simple `dbt parse` : cela vérifie que le
+    # SQL s'exécute réellement, y compris les fonctions propres à PostgreSQL
+    # comme `percentile_cont` et `count(*) filter (...)`.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dpe_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Installer dbt
+        run: pip install dbt-core==1.9.1 dbt-postgres==1.9.0
+
+      - name: Préparer les schémas
+        run: psql "$DATABASE_URL" -f scripts/init-warehouse.sql
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dpe_ci
+          PGPASSWORD: postgres
+
+      - name: Vérifier la compilation des modèles
+        working-directory: dbt/dpe_analytics
+        run: dbt compile --profiles-dir . --target ci
+        env:
+          WAREHOUSE_HOST: localhost
+          WAREHOUSE_PORT: "5432"
+          WAREHOUSE_USER: postgres
+          WAREHOUSE_PASSWORD: postgres
+          WAREHOUSE_DB: dpe_ci

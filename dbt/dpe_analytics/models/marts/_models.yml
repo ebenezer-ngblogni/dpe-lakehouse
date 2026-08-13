@@ -1,0 +1,101 @@
+version: 2
+
+models:
+  - name: fct_dpe
+    description: >
+      Table de faits du modèle en étoile. Grain : un diagnostic de performance
+      énergétique courant, valide et non remplacé.
+    data_tests:
+      # Cohérence entre l'étiquette et la consommation : un logement classé A
+      # ne peut pas consommer 400 kWh/m²/an. Un écart signalerait une erreur de
+      # jointure ou d'enrichissement, pas une donnée source douteuse.
+      - dbt_utils.expression_is_true:
+          expression: "not (etiquette_dpe = 'A' and conso_ep_kwh_m2_an > 100)"
+    columns:
+      - name: cle_dpe
+        description: Identifiant du diagnostic, clé primaire de la table.
+        data_tests:
+          - unique
+          - not_null
+
+      - name: code_commune
+        description: Code INSEE de la commune, clé étrangère vers dim_commune.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_commune')
+              field: code_commune
+
+      - name: etiquette_dpe
+        description: Classe énergie A à G.
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["A", "B", "C", "D", "E", "F", "G"]
+
+      - name: etiquette_ges
+        description: Classe climat A à G.
+        data_tests:
+          - accepted_values:
+              values: ["A", "B", "C", "D", "E", "F", "G"]
+              config:
+                # Certains DPE anciens n'ont pas d'étiquette GES renseignée :
+                # un avertissement suffit, ce n'est pas un défaut de pipeline.
+                severity: warn
+
+      - name: surface_m2
+        description: Surface habitable en m², strictement positive après filtrage.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 1000
+              inclusive: false
+
+      - name: conso_ep_kwh_m2_an
+        description: Consommation en énergie primaire, kWh/m²/an, 5 usages.
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 2000
+              inclusive: true
+
+      - name: est_passoire_thermique
+        description: Vrai si l'étiquette est F ou G (loi Climat et Résilience).
+        data_tests:
+          - not_null
+
+  - name: dim_commune
+    description: >
+      Dimension commune, dérivée des DPE eux-mêmes faute de référentiel fourni
+      par la source. Le libellé retenu est le plus fréquent par code INSEE.
+    columns:
+      - name: code_commune
+        data_tests:
+          - unique
+          - not_null
+      - name: nom_commune
+        data_tests:
+          - not_null
+      - name: code_departement
+        description: Code département sur 2 ou 3 caractères (Corse et DOM inclus).
+
+  - name: mart_performance_commune
+    description: >
+      Agrégat par commune et par année, alimentant directement la carte et les
+      séries temporelles du rapport Power BI.
+    columns:
+      - name: code_commune
+        data_tests:
+          - not_null
+      - name: taux_passoires_pct
+        description: Part des logements classés F ou G, en pourcentage.
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              inclusive: true
+      - name: nb_dpe
+        description: Nombre de diagnostics de la commune pour l'année.
+        data_tests:
+          - not_null

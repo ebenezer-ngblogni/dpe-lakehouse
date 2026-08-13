@@ -1,0 +1,30 @@
+# Données : jamais versionnées, elles se régénèrent depuis l'API
+data/
+*.parquet
+logs_backfill.log
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+
+# Scala / sbt
+spark-jobs/target/
+spark-jobs/project/target/
+spark-jobs/project/project/
+.bsp/
+
+# dbt
+dbt/dpe_analytics/target/
+dbt/dpe_analytics/dbt_packages/
+dbt/dpe_analytics/logs/
+
+# Power BI : le .pbix contient les données importées, trop lourd pour Git.
+# Seul le modèle exporté en .bim et les captures sont versionnés.
+*.pbix
+
+# Divers
+.DS_Store
+.idea/

@@ -1,0 +1,5 @@
+packages:
+  # Fournit accepted_range, expression_is_true et les macros de test utilisées
+  # dans models/marts/_models.yml.
+  - package: dbt-labs/dbt_utils
+    version: [">=1.3.0", "<2.0.0"]

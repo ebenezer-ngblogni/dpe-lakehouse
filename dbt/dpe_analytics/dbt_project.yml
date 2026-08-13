@@ -1,0 +1,46 @@
+name: dpe_analytics
+version: "1.0.0"
+config-version: 2
+
+profile: dpe_analytics
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  dpe_analytics:
+    # staging : renommage et contrat de nommage, aucune logique métier.
+    # Matérialisé en vue : ces modèles ne sont qu'une façade sur les tables
+    # chargées par Spark, les matérialiser coûterait du stockage sans rien gagner.
+    staging:
+      +materialized: view
+      +schema: staging
+
+    # intermediate : calculs réutilisés par plusieurs marts.
+    intermediate:
+      +materialized: ephemeral
+
+    # marts : modèle en étoile consommé par Power BI. En table, car Power BI
+    # interroge ces objets directement et doit obtenir une réponse rapide.
+    marts:
+      +materialized: table
+      +schema: marts
+
+seeds:
+  dpe_analytics:
+    +schema: reference
+    referentiel_regions:
+      +column_types:
+        code_region: varchar(2)
+
+vars:
+  # Seuil réglementaire : F et G désignent les passoires thermiques au sens de
+  # la loi Climat et Résilience.
+  etiquettes_passoire: ["F", "G"]
+  # Un DPE reste valide 10 ans à compter de son établissement.
+  duree_validite_dpe_annees: 10

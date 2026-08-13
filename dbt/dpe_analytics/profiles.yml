@@ -1,0 +1,33 @@
+# Profil dbt. Les identifiants passent par variables d'environnement : ce
+# fichier est versionné, il ne doit contenir aucun secret en clair.
+#
+# Les valeurs par défaut correspondent à la pile docker-compose locale, ce qui
+# permet de lancer `dbt run` sans configuration préalable.
+
+dpe_analytics:
+  target: dev
+
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('WAREHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('WAREHOUSE_PORT', '5433') | int }}"
+      user: "{{ env_var('WAREHOUSE_USER', 'dpe') }}"
+      password: "{{ env_var('WAREHOUSE_PASSWORD', 'dpe') }}"
+      dbname: "{{ env_var('WAREHOUSE_DB', 'dpe') }}"
+      schema: public
+      # 4 fils : au-delà, les modèles se bloquent mutuellement sur les verrous
+      # de création de table dans PostgreSQL.
+      threads: 4
+      keepalives_idle: 0
+      connect_timeout: 30
+
+    ci:
+      type: postgres
+      host: "{{ env_var('WAREHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('WAREHOUSE_PORT', '5432') | int }}"
+      user: "{{ env_var('WAREHOUSE_USER', 'postgres') }}"
+      password: "{{ env_var('WAREHOUSE_PASSWORD', 'postgres') }}"
+      dbname: "{{ env_var('WAREHOUSE_DB', 'dpe_ci') }}"
+      schema: public
+      threads: 2

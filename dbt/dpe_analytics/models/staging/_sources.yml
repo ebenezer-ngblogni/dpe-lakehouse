@@ -1,0 +1,54 @@
+version: 2
+
+sources:
+  - name: silver
+    description: >
+      Tables chargées dans l'entrepôt par le job Spark Scala depuis la couche
+      silver du lac. dbt ne les crée pas : il les consomme.
+    schema: silver
+    tables:
+      - name: dpe_courant
+        description: >
+          Un DPE par logement, déjà dédoublonné, débarrassé des diagnostics
+          remplacés et filtré par les règles de qualité.
+        loaded_at_field: date_etablissement_dpe
+        freshness:
+          # La source ADEME est mise à jour chaque semaine ; au-delà de deux
+          # semaines sans nouveau DPE, le chargement est probablement en panne.
+          warn_after: { count: 14, period: day }
+          error_after: { count: 30, period: day }
+        columns:
+          - name: numero_dpe
+            description: Identifiant unique du diagnostic.
+            data_tests:
+              - unique
+              - not_null
+          - name: etiquette_dpe
+            description: Classe énergie de A à G.
+            data_tests:
+              - not_null
+              - accepted_values:
+                  values: ["A", "B", "C", "D", "E", "F", "G"]
+          - name: etiquette_ges
+            description: Classe climat (émissions de gaz à effet de serre) de A à G.
+          - name: code_insee_ban
+            description: Code commune INSEE issu du géocodage BAN.
+            data_tests:
+              - not_null
+          - name: surface_habitable_logement
+            description: Surface habitable en m², strictement positive après filtrage.
+          - name: conso_5_usages_par_m2_ep
+            description: >
+              Consommation en énergie primaire, kWh/m²/an, tous usages
+              réglementaires confondus (chauffage, ECS, refroidissement,
+              éclairage, auxiliaires).
+
+      - name: dpe_rejets
+        description: >
+          Lignes écartées par le job Spark, avec leur motif. Conservées pour
+          l'audit : un pipeline qui jette des données sans trace n'est pas
+          auditable.
+        columns:
+          - name: motif_rejet
+            data_tests:
+              - not_null

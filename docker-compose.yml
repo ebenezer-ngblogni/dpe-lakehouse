@@ -1,0 +1,178 @@
+# Pile complète du lakehouse DPE, exécutable sur une machine unique.
+#
+# Dimensionnement : pensé pour ~16 Go de RAM. Airflow tourne en LocalExecutor
+# (pas de Celery ni de Redis) et Spark en un seul worker : sur un poste de
+# développement, un cluster multi-worker consomme de la mémoire sans rien
+# accélérer, puisque les cœurs sont déjà partagés.
+
+x-airflow-common: &airflow-common
+  build:
+    context: ./docker/airflow
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+    # Accès au lac de données
+    AWS_ENDPOINT_URL: http://minio:9000
+    AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+    AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    DPE_BRONZE_ROOT: s3://lakehouse/bronze
+    # Entrepôt analytique
+    WAREHOUSE_HOST: warehouse
+    WAREHOUSE_PORT: "5432"
+    WAREHOUSE_DB: dpe
+    WAREHOUSE_USER: ${WAREHOUSE_USER:-dpe}
+    WAREHOUSE_PASSWORD: ${WAREHOUSE_PASSWORD:-dpe}
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./ingestion:/opt/airflow/ingestion
+    - ./dbt:/opt/airflow/dbt
+    - ./spark-jobs/target/scala-2.12:/opt/airflow/jars:ro
+    - airflow-logs:/opt/airflow/logs
+  depends_on:
+    airflow-db:
+      condition: service_healthy
+
+services:
+  # ---------------------------------------------------------------- #
+  # Lac de données : stockage objet compatible S3
+  # ---------------------------------------------------------------- #
+  minio:
+    image: minio/minio:latest
+    container_name: dpe_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # console web
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Crée le bucket au démarrage puis s'arrête : un conteneur éphémère évite
+  # d'avoir à créer le bucket à la main avant le premier run.
+  minio-init:
+    image: minio/mc:latest
+    container_name: dpe_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} &&
+      mc mb --ignore-existing local/lakehouse &&
+      echo 'bucket lakehouse prêt'
+      "
+
+  # ---------------------------------------------------------------- #
+  # Entrepôt analytique : cible de dbt et source de Power BI
+  # ---------------------------------------------------------------- #
+  warehouse:
+    image: postgres:16-alpine
+    container_name: dpe_warehouse
+    environment:
+      POSTGRES_DB: dpe
+      POSTGRES_USER: ${WAREHOUSE_USER:-dpe}
+      POSTGRES_PASSWORD: ${WAREHOUSE_PASSWORD:-dpe}
+    ports:
+      # 5433 côté hôte : évite le conflit avec un PostgreSQL déjà installé.
+      - "5433:5432"
+    volumes:
+      - warehouse-data:/var/lib/postgresql/data
+      - ./scripts/init-warehouse.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WAREHOUSE_USER:-dpe} -d dpe"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------- #
+  # Spark : exécution du job Scala bronze -> silver
+  # ---------------------------------------------------------------- #
+  spark:
+    build:
+      context: ./docker/spark
+    container_name: dpe_spark
+    environment:
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY:-4g}
+    volumes:
+      - ./spark-jobs/target/scala-2.12:/opt/jars:ro
+      - ./data:/opt/data
+    ports:
+      - "4040:4040"   # interface Spark pendant l'exécution d'un job
+    depends_on:
+      minio:
+        condition: service_healthy
+    # Conteneur de travail : il attend qu'on lui soumette un job.
+    command: ["tail", "-f", "/dev/null"]
+
+  # ---------------------------------------------------------------- #
+  # Orchestration
+  # ---------------------------------------------------------------- #
+  airflow-db:
+    image: postgres:16-alpine
+    container_name: dpe_airflow_db
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - airflow-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-init:
+    <<: *airflow-common
+    container_name: dpe_airflow_init
+    entrypoint: >
+      /bin/bash -c "
+      airflow db migrate &&
+      airflow users create --username admin --password admin
+        --firstname Admin --lastname Local --role Admin --email admin@example.com
+      || true
+      "
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: dpe_airflow_web
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: dpe_airflow_scheduler
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+volumes:
+  minio-data:
+  warehouse-data:
+  airflow-db-data:
+  airflow-logs:
