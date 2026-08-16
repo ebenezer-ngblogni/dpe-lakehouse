@@ -32,6 +32,7 @@ renomme as (
         coordonnee_cartographique_x_ban             as coord_x_lambert93,
         coordonnee_cartographique_y_ban             as coord_y_lambert93,
         geocodage_fiable,
+        geocodage_precis,
 
         -- Bâti
         type_batiment,

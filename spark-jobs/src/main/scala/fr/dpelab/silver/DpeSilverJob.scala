@@ -76,11 +76,27 @@ object DpeSilverJob {
   )
 
   def calculerMetriques(prepare: DataFrame, lignesBronze: Long): Metriques = {
-    val apresDedup = prepare.count()
-    val remplaces = prepare.filter(col("est_remplace")).count()
-    val rejetes = prepare.filter(!col("est_valide")).count()
-    val retenus = prepare.filter(col("est_valide") && !col("est_remplace")).count()
-    val geoNonFiable = prepare.filter(col("est_valide") && !col("geocodage_fiable")).count()
+    // Une seule agrégation plutôt que cinq `count()` successifs : sur 15 M de
+    // lignes, chaque `count()` déclenche une passe complète sur les données.
+    // Les compteurs conditionnels les regroupent en un seul balayage.
+    def compteur(condition: org.apache.spark.sql.Column) =
+      sum(when(condition, 1L).otherwise(0L))
+
+    val agregats = prepare
+      .agg(
+        count(lit(1)).as("apres_dedup"),
+        compteur(col("est_remplace")).as("remplaces"),
+        compteur(!col("est_valide")).as("rejetes"),
+        compteur(col("est_valide") && !col("est_remplace")).as("retenus"),
+        compteur(col("est_valide") && !col("geocodage_fiable")).as("geo_non_fiable")
+      )
+      .head()
+
+    val apresDedup = agregats.getAs[Long]("apres_dedup")
+    val remplaces = agregats.getAs[Long]("remplaces")
+    val rejetes = agregats.getAs[Long]("rejetes")
+    val retenus = agregats.getAs[Long]("retenus")
+    val geoNonFiable = agregats.getAs[Long]("geo_non_fiable")
 
     val motifs = prepare
       .filter(col("motif_rejet").isNotNull)

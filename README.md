@@ -128,27 +128,53 @@ Chaque mois devient une unité de travail indépendante, rejouable, et vérifiab
 par comparaison au total annoncé par la source. C'est ce découpage qui rend le
 `make ingest-full` interruptible : relancé, il reprend là où il s'était arrêté.
 
-### 3. Les DPE se remplacent les uns les autres
+### 3. Les chaînes de remplacement : une intuition démentie par la mesure
 
-8,9 % des diagnostics référencent un DPE antérieur via `numero_dpe_remplace`.
-Sans traitement, un même logement apparaît plusieurs fois avec des étiquettes
-différentes — et le taux de passoires thermiques devient faux.
+**8,6 % des diagnostics référencent un DPE antérieur** via `numero_dpe_remplace`.
+J'en ai déduit qu'une part importante du jeu devait être écartée comme périmée.
 
-La règle : un DPE est périmé dès lors qu'il figure dans la colonne
-`numero_dpe_remplace` d'un autre enregistrement. La source chaînant
-`A ← B ← C` en deux liens distincts, une résolution à un seul niveau suffit à
-marquer A et B comme obsolètes — inutile de calculer une fermeture transitive.
-Ce cas est couvert par un test dédié.
+La mesure sur les 15,3 M de lignes dit autre chose : **seuls 1 499 DPE (0,01 %)
+sont effectivement remplacés**. Les prédécesseurs référencés appartiennent en
+quasi-totalité à l'**ancien régime de DPE, antérieur à juillet 2021**, publié
+dans un jeu ADEME distinct et donc absent d'ici.
 
-### 4. Le géocodage n'est pas fiable partout
+La règle reste juste — un DPE est périmé dès lors qu'il figure dans la colonne
+`numero_dpe_remplace` d'un autre enregistrement — mais son impact est marginal.
+Elle est conservée pour deux raisons : elle protège d'une évolution de la source,
+et elle deviendra significative en croisant les deux jeux ADEME.
 
-`score_ban` mesure la confiance du rapprochement d'adresse. Des valeurs à 0,48
-ou 0,62 apparaissent dès les premières lignes.
+De la même façon, la déduplication sur `numero_dpe` ne retire **aucune ligne** :
+vérification faite sur l'échantillon 2024, les 3 732 855 identifiants sont tous
+distincts. C'est un filet de sécurité, pas un traitement décisif — le dire
+franchement vaut mieux que de laisser croire à un nettoyage spectaculaire.
 
-Choix retenu : **ne pas rejeter** ces lignes — la donnée énergétique reste
-valable — mais les marquer via `geocodage_fiable`. Les centroïdes communaux du
-modèle sont calculés sur les seuls points fiables, sinon les adresses mal
-rapprochées tireraient le point vers le centre du département.
+### 4. Un seuil choisi à l'intuition, corrigé par la distribution
+
+Premier réflexe : marquer comme non fiable tout géocodage dont le `score_ban`
+descend sous 0,8. Résultat sur les données réelles : **79 % des lignes
+signalées**. Un drapeau qui se déclenche sur 4 lignes sur 5 n'informe personne.
+
+La distribution mesurée sur les 3,7 M de DPE de 2024 explique pourquoi :
+
+| p1 | p25 | **médiane** | p75 | p90 |
+|---|---|---|---|---|
+| 0,32 | 0,54 | **0,64** | 0,75 | 0,95 |
+
+Seules 18,9 % des lignes dépassent 0,8. Le seuil était arbitraire.
+
+La source fournit un bien meilleur signal : `statut_geocodage`, verdict de
+l'ADEME elle-même, qui sépare nettement **73,1 %** d'adresses « géocodée ban à
+l'adresse » de **26,9 %** « non géocodée car aucune correspondance ».
+
+Deux drapeaux en découlent :
+
+- `geocodage_fiable` — l'adresse a été rapprochée de la BAN
+- `geocodage_precis` — rapprochée **et** score au-dessus de la médiane
+
+Aucun des deux ne rejette la ligne : la donnée énergétique reste valable sans
+localisation exacte. Les centroïdes communaux sont calculés sur les seuls points
+précis, sinon les adresses mal rapprochées tireraient le point vers le centre du
+département.
 
 ### 5. Spark sur JDK 17
 

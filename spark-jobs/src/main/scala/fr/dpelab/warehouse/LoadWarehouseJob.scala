@@ -24,7 +24,13 @@ object LoadWarehouseJob {
       user: String = "dpe",
       password: String = "dpe",
       schema: String = "silver",
-      batchSize: Int = 10000
+      batchSize: Int = 10000,
+      // Le lac conserve l'historique intégral depuis juillet 2021 ; l'entrepôt
+      // ne sert qu'une fenêtre analytique. Séparer les deux est un choix
+      // d'architecture courant : il évite de dimensionner l'entrepôt sur un
+      // historique que les rapports n'interrogent pas.
+      // `None` charge tout.
+      depuisAnnee: Option[Int] = None
   )
 
   private val parser = {
@@ -39,6 +45,9 @@ object LoadWarehouseJob {
       opt[String]("password").action((v, c) => c.copy(password = v)),
       opt[String]("schema").action((v, c) => c.copy(schema = v)),
       opt[Int]("batch-size").action((v, c) => c.copy(batchSize = v)),
+      opt[Int]("depuis-annee")
+        .action((v, c) => c.copy(depuisAnnee = Some(v)))
+        .text("Ne charge que les DPE établis à partir de cette année (défaut : tout)"),
       help("help")
     )
   }
@@ -77,7 +86,19 @@ object LoadWarehouseJob {
       config: WarehouseConfig,
       props: Properties
   ): Unit = {
-    val df: DataFrame = spark.read.parquet(source)
+    import org.apache.spark.sql.functions.col
+
+    val brut: DataFrame = spark.read.parquet(source)
+
+    // Le filtre porte sur la colonne de partition : Spark élague les répertoires
+    // sans les lire, le coût du filtrage est donc nul.
+    val df = config.depuisAnnee match {
+      case Some(annee) if brut.columns.contains("annee_etablissement") =>
+        println(s"[warehouse] fenêtre appliquée : annee_etablissement >= $annee")
+        brut.filter(col("annee_etablissement") >= annee)
+      case _ => brut
+    }
+
     val lignes = df.count()
 
     // Le nombre de partitions Spark détermine le nombre de connexions JDBC

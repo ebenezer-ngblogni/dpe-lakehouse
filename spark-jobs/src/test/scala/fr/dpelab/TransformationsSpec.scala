@@ -48,6 +48,10 @@ class TransformationsSpec extends AnyFunSuite with Matchers with BeforeAndAfterA
       "surface_habitable_logement"
     ).withColumn("conso_5_usages_par_m2_ep", org.apache.spark.sql.functions.lit("150"))
       .withColumn("score_ban", org.apache.spark.sql.functions.lit("0.95"))
+      .withColumn(
+        "statut_geocodage",
+        org.apache.spark.sql.functions.lit("adresse géocodée ban à l'adresse")
+      )
       .withColumn("date_fin_validite_dpe", org.apache.spark.sql.functions.lit("2035-01-01"))
       .withColumn("annee_construction", org.apache.spark.sql.functions.lit("1980"))
   }
@@ -138,25 +142,44 @@ class TransformationsSpec extends AnyFunSuite with Matchers with BeforeAndAfterA
     result.select("motif_rejet").head().getString(0) shouldBe "consommation_aberrante"
   }
 
-  test("un score BAN faible marque le géocodage comme non fiable sans rejeter la ligne") {
+  test("une adresse non rapprochée de la BAN est marquée non fiable sans être rejetée") {
     import org.apache.spark.sql.functions.lit
     val df = bronze(("X", "", "2024-05-12", "2024-05-12", "2024-05-12", "D", "11069", "75"))
-      .withColumn("score_ban", lit("0.42"))
-    val result = Transformations.appliquerQualite(Transformations.typerColonnes(df))
-    val row = result.head()
+      .withColumn("statut_geocodage", lit("adresse non géocodée ban car aucune correspondance"))
+    val row = Transformations.appliquerQualite(Transformations.typerColonnes(df)).head()
 
     row.getAs[Boolean]("geocodage_fiable") shouldBe false
+    // La donnée énergétique reste exploitable même sans localisation précise.
     row.getAs[Boolean]("est_valide") shouldBe true
   }
 
-  test("un score BAN absent ne fait pas planter le drapeau de fiabilité") {
+  test("une adresse géocodée au score modeste reste fiable mais pas précise") {
+    import org.apache.spark.sql.functions.lit
+    val df = bronze(("X", "", "2024-05-12", "2024-05-12", "2024-05-12", "D", "11069", "75"))
+      .withColumn("score_ban", lit("0.42"))
+    val row = Transformations.appliquerQualite(Transformations.typerColonnes(df)).head()
+
+    row.getAs[Boolean]("geocodage_fiable") shouldBe true
+    row.getAs[Boolean]("geocodage_precis") shouldBe false
+  }
+
+  test("une adresse géocodée au score élevé est fiable et précise") {
+    val df = bronze(("X", "", "2024-05-12", "2024-05-12", "2024-05-12", "D", "11069", "75"))
+    val row = Transformations.appliquerQualite(Transformations.typerColonnes(df)).head()
+
+    row.getAs[Boolean]("geocodage_fiable") shouldBe true
+    row.getAs[Boolean]("geocodage_precis") shouldBe true
+  }
+
+  test("un statut de géocodage absent ne fait pas planter les drapeaux") {
     import org.apache.spark.sql.functions.lit
     import org.apache.spark.sql.types.StringType
     val df = bronze(("X", "", "2024-05-12", "2024-05-12", "2024-05-12", "D", "11069", "75"))
-      .withColumn("score_ban", lit(null).cast(StringType))
-    val result = Transformations.appliquerQualite(Transformations.typerColonnes(df))
+      .withColumn("statut_geocodage", lit(null).cast(StringType))
+    val row = Transformations.appliquerQualite(Transformations.typerColonnes(df)).head()
 
-    result.head().getAs[Boolean]("geocodage_fiable") shouldBe false
+    row.getAs[Boolean]("geocodage_fiable") shouldBe false
+    row.getAs[Boolean]("geocodage_precis") shouldBe false
   }
 
   test("l'enrichissement identifie les passoires thermiques et les tranches d'âge") {

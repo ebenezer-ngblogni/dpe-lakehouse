@@ -28,3 +28,6 @@ dbt/dpe_analytics/logs/
 # Divers
 .DS_Store
 .idea/
+
+# Runtime Spark telecharge localement
+tools/

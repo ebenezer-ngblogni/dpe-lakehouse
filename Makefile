@@ -9,6 +9,32 @@ JAR         := spark-jobs/target/scala-2.12/dpe-spark-jobs.jar
 BRONZE      := data/bronze/dpe_existant
 SILVER      := data/silver
 
+# Runtime Spark : celui du dépôt s'il a été téléchargé (`make spark-runtime`),
+# sinon celui du PATH.
+SPARK_HOME  ?= $(wildcard tools/spark-3.5.3-bin-hadoop3)
+SPARK_SUBMIT = $(if $(SPARK_HOME),$(SPARK_HOME)/bin/spark-submit,spark-submit)
+
+# Répertoire des fichiers temporaires de Spark (shuffle, spill).
+# La déduplication de 15,3 M de lignes brasse plus de 10 Go de shuffle : par
+# défaut ces fichiers vont dans /tmp et saturent le disque système. Ce sont des
+# temporaires purs, sans besoin de permissions POSIX, donc n'importe quel disque
+# convient — y compris NTFS.
+SPARK_LOCAL_DIR ?= $(if $(wildcard data/.),$(shell readlink -f data)/tmp-spark,/tmp/spark-dpe)
+
+# Spark accède à des paquets internes du JDK par réflexion ; depuis le JDK 16
+# il faut les rouvrir explicitement, sinon le job échoue dès la première
+# manipulation de date.
+SPARK_JDK_OPTS := \
+  --add-opens=java.base/java.lang=ALL-UNNAMED \
+  --add-opens=java.base/java.lang.invoke=ALL-UNNAMED \
+  --add-opens=java.base/java.io=ALL-UNNAMED \
+  --add-opens=java.base/java.net=ALL-UNNAMED \
+  --add-opens=java.base/java.nio=ALL-UNNAMED \
+  --add-opens=java.base/java.util=ALL-UNNAMED \
+  --add-opens=java.base/java.util.concurrent=ALL-UNNAMED \
+  --add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
+  --add-opens=java.base/sun.util.calendar=ALL-UNNAMED
+
 .PHONY: help
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -64,12 +90,36 @@ test: test-scala test-python ## Exécute toute la suite de tests
 lint: ## Vérifie le style Python
 	$(VENV)/bin/ruff check ingestion
 
+.PHONY: spark-runtime
+spark-runtime: ## Télécharge le runtime Spark local (~400 Mo)
+	mkdir -p tools && cd tools && \
+	curl -fL -o spark.tgz https://archive.apache.org/dist/spark/spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz && \
+	tar xzf spark.tgz && rm spark.tgz
+
 .PHONY: silver
 silver: $(JAR) ## Lance la transformation bronze -> silver en local
-	spark-submit --class fr.dpelab.silver.DpeSilverJob --master 'local[*]' \
-		--driver-memory 4g $(JAR) \
+	@mkdir -p "$(SPARK_LOCAL_DIR)"
+	@echo "Temporaires Spark : $(SPARK_LOCAL_DIR)"
+	$(SPARK_SUBMIT) --class fr.dpelab.silver.DpeSilverJob --master 'local[*]' \
+		--driver-memory $${SPARK_DRIVER_MEMORY:-5g} \
+		--conf "spark.local.dir=$(SPARK_LOCAL_DIR)" \
+		--conf "spark.driver.extraJavaOptions=$(SPARK_JDK_OPTS)" \
+		--conf "spark.executor.extraJavaOptions=$(SPARK_JDK_OPTS)" \
+		$(JAR) \
 		--bronze-path $(BRONZE) --silver-path $(SILVER)/dpe_courant \
-		--rejects-path $(SILVER)/dpe_rejets --metrics-path $(SILVER)/_metrics
+		--rejects-path $(SILVER)/dpe_rejets --metrics-path $(SILVER)/_metrics \
+		--shuffle-partitions 200
+
+.PHONY: warehouse
+warehouse: $(JAR) ## Charge silver vers PostgreSQL (fenêtre depuis 2024)
+	$(SPARK_SUBMIT) --class fr.dpelab.warehouse.LoadWarehouseJob --master 'local[*]' \
+		--driver-memory $${SPARK_DRIVER_MEMORY:-5g} \
+		--packages org.postgresql:postgresql:42.7.4 \
+		--conf "spark.driver.extraJavaOptions=$(SPARK_JDK_OPTS)" \
+		$(JAR) \
+		--silver-path $(SILVER)/dpe_courant --rejects-path $(SILVER)/dpe_rejets \
+		--jdbc-url jdbc:postgresql://localhost:5433/dpe \
+		--depuis-annee 2024
 
 # ---------------------------------------------------------------- #
 # Infrastructure

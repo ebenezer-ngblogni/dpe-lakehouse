@@ -34,15 +34,16 @@ libelles_classes as (
 centroides as (
 
     -- Centroïde approché de la commune, calculé sur les seuls DPE dont le
-    -- géocodage est fiable : inclure les adresses mal rapprochées décalerait
-    -- le point vers le centre du département.
+    -- géocodage est précis (adresse rapprochée de la BAN *et* score au-dessus
+    -- de la médiane). Inclure les adresses mal rapprochées décalerait le point
+    -- vers le centre du département.
     select
         code_commune,
         avg(coord_x_lambert93) as centroide_x_lambert93,
         avg(coord_y_lambert93) as centroide_y_lambert93,
-        count(*)               as nb_points_fiables
+        count(*)               as nb_points_precis
     from dpe
-    where geocodage_fiable
+    where geocodage_precis
       and coord_x_lambert93 is not null
       and coord_y_lambert93 is not null
     group by code_commune
@@ -56,7 +57,7 @@ select
     l.code_region,
     c.centroide_x_lambert93,
     c.centroide_y_lambert93,
-    coalesce(c.nb_points_fiables, 0) as nb_points_geocodes_fiables
+    coalesce(c.nb_points_precis, 0) as nb_points_geocodes_precis
 from libelles_classes l
 left join centroides c using (code_commune)
 where l.rang_libelle = 1
