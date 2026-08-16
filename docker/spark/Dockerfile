@@ -22,13 +22,33 @@ RUN set -eux; \
 
 # Configuration S3A commune à tous les jobs, pour ne pas la répéter en ligne de
 # commande à chaque soumission.
-RUN printf '%s\n' \
+# L'image officielle n'embarque pas de répertoire /opt/spark/conf : il faut le
+# créer avant d'y déposer une configuration.
+RUN mkdir -p /opt/spark/conf && printf '%s\n' \
     'spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem' \
     'spark.hadoop.fs.s3a.path.style.access=true' \
     'spark.hadoop.fs.s3a.connection.ssl.enabled=false' \
     'spark.hadoop.fs.s3a.aws.credentials.provider=org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider' \
     'spark.sql.sources.partitionOverwriteMode=dynamic' \
+    'spark.jars.ivy=/tmp/.ivy2' \
     > /opt/spark/conf/spark-defaults.conf
+
+# L'image officielle ne place les binaires Spark dans le PATH que pour son point
+# d'entrée : une session `docker exec` ne les trouve pas. Or c'est précisément
+# ainsi qu'Airflow soumet les jobs.
+ENV PATH="/opt/spark/bin:/opt/spark/sbin:${PATH}"
+
+# Le conteneur tourne sous l'uid de l'hôte pour pouvoir écrire dans le lac monté
+# (voir docker-compose.yml). Sans entrée correspondante dans /etc/passwd, cet
+# uid n'a pas d'identité : la JVM ne résout pas `user.home` et Hadoop échoue sur
+# « invalid null input: name » en interrogeant l'utilisateur courant.
+ARG HOST_UID=1000
+RUN echo "sparkrun:x:${HOST_UID}:0:Spark runtime user:/tmp:/sbin/nologin" >> /etc/passwd
+
+# Repli si le conteneur est lancé sous un autre uid que celui du build.
+ENV HADOOP_USER_NAME=sparkrun \
+    SPARK_USER=sparkrun \
+    HOME=/tmp
 
 USER spark
 WORKDIR /opt/spark

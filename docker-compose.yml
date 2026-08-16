@@ -18,7 +18,12 @@ x-airflow-common: &airflow-common
     AWS_ENDPOINT_URL: http://minio:9000
     AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
     AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    DPE_BRONZE_ROOT: s3://lakehouse/bronze
+    # Le lac est monté depuis l'hôte : la même donnée que celle utilisée par les
+    # cibles `make`, pour que le DAG opère sur l'état réel du projet et non sur
+    # une copie divergente.
+    DPE_BRONZE_ROOT: /opt/airflow/data/bronze
+    # Vue du lac depuis le conteneur Spark, qui le monte sous un autre chemin.
+    SPARK_DATA_ROOT: /opt/data
     # Entrepôt analytique
     WAREHOUSE_HOST: warehouse
     WAREHOUSE_PORT: "5432"
@@ -31,7 +36,29 @@ x-airflow-common: &airflow-common
     - ./ingestion:/opt/airflow/ingestion
     - ./dbt:/opt/airflow/dbt
     - ./spark-jobs/target/scala-2.12:/opt/airflow/jars:ro
+    - ./data:/opt/airflow/data
     - airflow-logs:/opt/airflow/logs
+    # Airflow soumet les jobs Spark via `docker exec` : il lui faut donc l'accès
+    # au démon Docker de l'hôte. Sans ce montage, les tâches Spark échouent avec
+    # « Cannot connect to the Docker daemon ».
+    - /var/run/docker.sock:/var/run/docker.sock
+  # Le socket Docker appartient au groupe `docker` de l'hôte, dont le GID varie
+  # d'une machine à l'autre (133 ici, souvent 999 ailleurs). L'ajouter aux
+  # groupes secondaires du conteneur est le seul moyen propre de laisser
+  # l'utilisateur `airflow` soumettre des jobs au conteneur Spark.
+  #
+  # À savoir : monter le socket Docker donne au conteneur un pouvoir équivalent
+  # à root sur l'hôte. Acceptable pour une pile de développement local, à
+  # proscrire en production — on y passerait par un opérateur Kubernetes ou un
+  # cluster Spark dédié.
+  group_add:
+    - "${DOCKER_GID:-999}"
+  # Airflow tourne par défaut en uid 50000, alors que les répertoires montés
+  # depuis l'hôte appartiennent à l'utilisateur courant (uid 1000). Sans
+  # alignement, ni la tâche d'ingestion ni dbt ne peuvent écrire : le premier
+  # échoue sur le lac, le second sur ses journaux.
+  # Renseigner AIRFLOW_UID dans .env avec la sortie de `id -u`.
+  user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     airflow-db:
       condition: service_healthy
@@ -104,15 +131,28 @@ services:
   spark:
     build:
       context: ./docker/spark
+      args:
+        HOST_UID: "${HOST_UID:-1000}"
     container_name: dpe_spark
     environment:
       AWS_ENDPOINT_URL: http://minio:9000
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY:-4g}
+      # L'uid injecté par `user:` n'a pas d'entrée dans /etc/passwd, donc la JVM
+      # ne sait pas résoudre `user.home` et le remplace par « ? ». Ivy tente
+      # alors d'écrire dans « ?/.ivy2 » et le job meurt sur
+      # « basedir must be absolute ». Un HOME explicite lève l'ambiguïté.
+      HOME: /tmp
     volumes:
       - ./spark-jobs/target/scala-2.12:/opt/jars:ro
       - ./data:/opt/data
+    # Même contrainte que pour Airflow : l'image officielle tourne sous
+    # l'utilisateur `spark` (uid 185), alors que le lac monté depuis l'hôte
+    # appartient à l'utilisateur courant. Sur un montage NTFS, dont les droits
+    # sont fixés par les options de montage, `chown` est même impossible :
+    # aligner l'uid du conteneur est la seule voie.
+    user: "${HOST_UID:-1000}:0"
     ports:
       - "4040:4040"   # interface Spark pendant l'exécution d'un job
     depends_on:
@@ -142,12 +182,19 @@ services:
   airflow-init:
     <<: *airflow-common
     container_name: dpe_airflow_init
+    # Exception : l'initialisation tourne en root pour donner au volume de
+    # journaux, créé par Docker en root, un propriétaire exploitable par les
+    # conteneurs qui suivent.
+    user: "0:0"
+    # Toutes les lignes du bloc `>` doivent rester au même niveau d'indentation :
+    # une ligne plus indentée conserverait son retour à la ligne et bash
+    # interpréterait la suite comme une commande distincte.
     entrypoint: >
       /bin/bash -c "
+      chown -R ${AIRFLOW_UID:-50000}:0 /opt/airflow/logs &&
       airflow db migrate &&
-      airflow users create --username admin --password admin
-        --firstname Admin --lastname Local --role Admin --email admin@example.com
-      || true
+      (airflow users create --username admin --password admin --firstname Admin
+      --lastname Local --role Admin --email admin@example.com || true)
       "
     restart: "no"
 

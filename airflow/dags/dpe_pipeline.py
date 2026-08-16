@@ -31,8 +31,28 @@ WAREHOUSE_USER = os.getenv("WAREHOUSE_USER", "dpe")
 WAREHOUSE_PASSWORD = os.getenv("WAREHOUSE_PASSWORD", "dpe")
 
 JDBC_URL = f"jdbc:postgresql://{WAREHOUSE_HOST}:{WAREHOUSE_PORT}/{WAREHOUSE_DB}"
-LAKE_ROOT = os.getenv("DPE_BRONZE_ROOT", "s3://lakehouse/bronze")
-SILVER_ROOT = LAKE_ROOT.replace("/bronze", "/silver")
+
+# Le lac est visible sous deux chemins différents selon le conteneur :
+# Airflow le monte sous /opt/airflow/data, Spark sous /opt/data. Les tâches
+# d'ingestion s'exécutent dans Airflow, les jobs Spark dans le conteneur Spark,
+# d'où deux racines distinctes plutôt qu'une seule.
+LAKE_ROOT = os.getenv("DPE_BRONZE_ROOT", "/opt/airflow/data/bronze")
+SPARK_DATA_ROOT = os.getenv("SPARK_DATA_ROOT", "/opt/data")
+SPARK_BRONZE = f"{SPARK_DATA_ROOT}/bronze"
+SPARK_SILVER = f"{SPARK_DATA_ROOT}/silver"
+
+# Le jar est monté en lecture seule dans le conteneur Spark.
+SPARK_JAR = "/opt/jars/dpe-spark-jobs.jar"
+
+# Rouvre les paquets internes du JDK, encapsulés depuis le JDK 16 mais toujours
+# atteints par réflexion par Spark dès qu'une colonne de type date est traitée.
+SPARK_JDK_OPTS = " ".join(
+    f"--add-opens=java.base/{module}=ALL-UNNAMED"
+    for module in (
+        "java.lang", "java.lang.invoke", "java.io", "java.net", "java.nio",
+        "java.util", "java.util.concurrent", "sun.nio.ch", "sun.util.calendar",
+    )
+)
 
 default_args = {
     "owner": "data-engineering",
@@ -88,12 +108,17 @@ with DAG(
             "--class fr.dpelab.silver.DpeSilverJob "
             "--master 'local[*]' "
             "--driver-memory ${SPARK_DRIVER_MEMORY:-4g} "
-            "--packages org.apache.hadoop:hadoop-aws:3.3.4 "
-            "/opt/jars/dpe-spark-jobs.jar "
-            f"--bronze-path {LAKE_ROOT}/dpe_existant "
-            f"--silver-path {SILVER_ROOT}/dpe_courant "
-            f"--rejects-path {SILVER_ROOT}/dpe_rejets "
-            f"--metrics-path {SILVER_ROOT}/_metrics"
+            f"--conf 'spark.driver.extraJavaOptions={SPARK_JDK_OPTS}' "
+            f"--conf 'spark.executor.extraJavaOptions={SPARK_JDK_OPTS}' "
+            # Les temporaires de shuffle vont sur le volume du lac : la
+            # déduplication de 15 M de lignes en produit plus de 10 Go, de quoi
+            # saturer le disque système.
+            f"--conf 'spark.local.dir={SPARK_DATA_ROOT}/tmp-spark' "
+            f"{SPARK_JAR} "
+            f"--bronze-path {SPARK_BRONZE}/dpe_existant "
+            f"--silver-path {SPARK_SILVER}/dpe_courant "
+            f"--rejects-path {SPARK_SILVER}/dpe_rejets "
+            f"--metrics-path {SPARK_SILVER}/_metrics"
         ),
     )
 
@@ -107,13 +132,16 @@ with DAG(
             "--class fr.dpelab.warehouse.LoadWarehouseJob "
             "--master 'local[*]' "
             "--driver-memory ${SPARK_DRIVER_MEMORY:-4g} "
-            "--packages org.postgresql:postgresql:42.7.4,org.apache.hadoop:hadoop-aws:3.3.4 "
-            "/opt/jars/dpe-spark-jobs.jar "
-            f"--silver-path {SILVER_ROOT}/dpe_courant "
-            f"--rejects-path {SILVER_ROOT}/dpe_rejets "
+            f"--conf 'spark.driver.extraJavaOptions={SPARK_JDK_OPTS}' "
+            f"{SPARK_JAR} "
+            f"--silver-path {SPARK_SILVER}/dpe_courant "
+            f"--rejects-path {SPARK_SILVER}/dpe_rejets "
             f"--jdbc-url {JDBC_URL} "
             f"--user {WAREHOUSE_USER} "
-            f"--password {WAREHOUSE_PASSWORD}"
+            f"--password {WAREHOUSE_PASSWORD} "
+            # Le lac garde l'historique complet depuis 2021 ; l'entrepôt ne
+            # sert que la fenêtre analytique interrogée par les rapports.
+            "--depuis-annee 2024"
         ),
     )
 
