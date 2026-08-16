@@ -185,6 +185,30 @@ Résolu par les `--add-opens` dans `build.sbt`.
 
 ---
 
+## État de validation
+
+Tout ce qui suit a été exécuté sur les données réelles, pas seulement écrit.
+
+| Étape | Preuve |
+|---|---|
+| Ingestion complète | 15 301 407 lignes, **écart nul** avec le total annoncé par l'API |
+| Job Spark bronze → silver | 15 301 407 lignes traitées, 14 440 357 retenues (94,37 %) |
+| Chargement de l'entrepôt | 7 849 190 lignes en PostgreSQL, 40 colonnes projetées sur 78 |
+| Modèles dbt | 4 modèles construits, 24 tests de données au vert |
+| Tests unitaires | 15 Scala, 15 Python |
+
+Les six tâches du DAG Airflow ont été exécutées individuellement via
+`airflow tasks test`, toutes avec un code retour 0 :
+
+| Tâche | Résultat |
+|---|---|
+| `ingestion_bronze` | 4 partitions, 618 298 lignes, écart nul |
+| `spark_bronze_vers_silver` | 15 301 407 lignes |
+| `chargement_entrepot` | 7 849 190 lignes |
+| `dbt_run` | 4 modèles |
+| `dbt_test` | 24 tests |
+| `dbt_docs_generate` | catalogue généré |
+
 ## Démarrage rapide
 
 ### Prérequis
