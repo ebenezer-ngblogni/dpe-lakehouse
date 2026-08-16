@@ -6,11 +6,21 @@ models:
       Table de faits du modèle en étoile. Grain : un diagnostic de performance
       énergétique courant, valide et non remplacé.
     data_tests:
-      # Cohérence entre l'étiquette et la consommation : un logement classé A
-      # ne peut pas consommer 400 kWh/m²/an. Un écart signalerait une erreur de
-      # jointure ou d'enrichissement, pas une donnée source douteuse.
+      # Cohérence entre l'étiquette et la consommation au m².
+      #
+      # Le test est volontairement restreint aux logements d'au moins 40 m² :
+      # en dessous, la relation ne tient pas. Les consommations fixes (eau
+      # chaude sanitaire, auxiliaires) rapportées à une surface minuscule
+      # gonflent mécaniquement le ratio kWh/m², si bien qu'un logement de 8 m²
+      # peut afficher une étiquette A avec 140 kWh/m²/an.
+      #
+      # Mesuré sur les 7,8 M de lignes : 81 logements dans ce cas, tous entre
+      # 5 et 15 m². Sans la restriction, le test signalait un défaut de
+      # pipeline là où il n'y avait qu'un effet d'échelle.
       - dbt_utils.expression_is_true:
           expression: "not (etiquette_dpe = 'A' and conso_ep_kwh_m2_an > 100)"
+          config:
+            where: "surface_m2 >= 40"
     columns:
       - name: cle_dpe
         description: Identifiant du diagnostic, clé primaire de la table.
@@ -47,10 +57,15 @@ models:
         description: Surface habitable en m², strictement positive après filtrage.
         data_tests:
           - not_null
+          # Borne haute inclusive, pour coller exactement à la règle appliquée
+          # en Scala (`surface > 1000` est rejetée, donc 1000 est conservée).
+          # Avec `inclusive: false`, deux logements de très exactement 1000 m²
+          # faisaient échouer le test — une incohérence entre deux règles du
+          # même projet, pas un défaut de donnée.
           - dbt_utils.accepted_range:
               min_value: 0
               max_value: 1000
-              inclusive: false
+              inclusive: true
 
       - name: conso_ep_kwh_m2_an
         description: Consommation en énergie primaire, kWh/m²/an, 5 usages.

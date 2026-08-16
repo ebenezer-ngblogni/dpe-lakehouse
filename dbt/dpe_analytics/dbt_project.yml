@@ -20,23 +20,19 @@ models:
     staging:
       +materialized: view
       +schema: staging
-
-    # intermediate : calculs réutilisés par plusieurs marts.
-    intermediate:
-      +materialized: ephemeral
+      # Droits déclaratifs : dbt recrée les objets à chaque exécution, donc un
+      # GRANT lancé à la main serait perdu au build suivant. Cette clause les
+      # réapplique automatiquement.
+      +grants:
+        select: ["powerbi_reader"]
 
     # marts : modèle en étoile consommé par Power BI. En table, car Power BI
     # interroge ces objets directement et doit obtenir une réponse rapide.
     marts:
       +materialized: table
       +schema: marts
-
-seeds:
-  dpe_analytics:
-    +schema: reference
-    referentiel_regions:
-      +column_types:
-        code_region: varchar(2)
+      +grants:
+        select: ["powerbi_reader"]
 
 vars:
   # Seuil réglementaire : F et G désignent les passoires thermiques au sens de

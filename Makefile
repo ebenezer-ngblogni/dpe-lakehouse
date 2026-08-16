@@ -118,7 +118,7 @@ warehouse: $(JAR) ## Charge silver vers PostgreSQL (fenêtre depuis 2024)
 		--conf "spark.driver.extraJavaOptions=$(SPARK_JDK_OPTS)" \
 		$(JAR) \
 		--silver-path $(SILVER)/dpe_courant --rejects-path $(SILVER)/dpe_rejets \
-		--jdbc-url jdbc:postgresql://localhost:5433/dpe \
+		--jdbc-url jdbc:postgresql://localhost:5434/dpe \
 		--depuis-annee 2024
 
 # ---------------------------------------------------------------- #
@@ -127,9 +127,9 @@ warehouse: $(JAR) ## Charge silver vers PostgreSQL (fenêtre depuis 2024)
 .PHONY: up
 up: ## Démarre la pile Docker complète
 	docker compose up -d
-	@echo "MinIO    : http://localhost:9001"
+	@echo "MinIO    : http://localhost:9003"
 	@echo "Airflow  : http://localhost:8080  (admin / admin)"
-	@echo "Entrepôt : postgresql://localhost:5433/dpe"
+	@echo "Entrepôt : postgresql://localhost:5434/dpe"
 
 .PHONY: down
 down: ## Arrête la pile Docker

@@ -21,6 +21,7 @@ HTTP `Link: <...>; rel=next`, que `requests` expose via `response.links`.
 from __future__ import annotations
 
 import logging
+import re
 import time
 from collections.abc import Iterator
 from datetime import date
@@ -152,15 +153,23 @@ class DpeApiClient:
             return pa.table({})
 
         header_line = payload.split(b"\n", 1)[0].decode("utf-8")
-        columns = [name.strip().strip('"') for name in header_line.split(",")]
+        # L'export CSV de l'API corrompt certains noms de colonnes en
+        # remplaçant un underscore par un espace : le schéma JSON déclare
+        # `conso_5_usages_par_m2_ef`, le CSV émet `conso_5 usages_par_m2_ef`.
+        # Aucune clé du schéma ADEME ne contient d'espace, la normalisation est
+        # donc sans risque de collision.
+        columns = [
+            re.sub(r"\s+", "_", name.strip().strip('"')) for name in header_line.split(",")
+        ]
 
-        return pa_csv.read_csv(
+        table = pa_csv.read_csv(
             pa.BufferReader(payload),
-            convert_options=pa_csv.ConvertOptions(
-                column_types={name: pa.string() for name in columns},
-                strings_can_be_null=True,
-            ),
+            convert_options=pa_csv.ConvertOptions(strings_can_be_null=True),
+            read_options=pa_csv.ReadOptions(column_names=columns, skip_rows=1),
         )
+        # Tout en texte : bronze conserve la donnée telle que la source
+        # l'expose, le typage relève de silver.
+        return table.cast(pa.schema([(nom, pa.string()) for nom in table.column_names]))
 
 
 def month_filter(field: str, start: date, end: date) -> str:

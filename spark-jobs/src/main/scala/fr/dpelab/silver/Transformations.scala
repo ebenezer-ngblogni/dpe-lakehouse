@@ -34,6 +34,32 @@ object Transformations {
   val SeuilScoreBan: Double = 0.64
 
   // ------------------------------------------------------------------ //
+  // 0. Normalisation des noms de colonnes
+  // ------------------------------------------------------------------ //
+
+  /** Répare les noms de colonnes corrompus par l'export CSV de l'API ADEME.
+    *
+    * Le schéma JSON du jeu déclare `conso_5_usages_par_m2_ef` et
+    * `emission_ges_5_usages_par_m2`, mais l'export CSV émet ces mêmes colonnes
+    * avec un espace à la place d'un underscore :
+    *
+    *   `conso_5 usages_par_m2_ef`
+    *   `emission_ges_5_usages par_m2`
+    *
+    * Sans réparation, ces deux colonnes — dont les émissions de GES au m², un
+    * indicateur central — sont introuvables en aval et disparaissent
+    * silencieusement du modèle.
+    *
+    * Aucune clé du schéma ADEME ne contient d'espace : remplacer tout espace
+    * par un underscore est donc sans risque de collision.
+    */
+  def normaliserNomsColonnes(df: DataFrame): DataFrame =
+    df.columns.foldLeft(df) { (acc, nom) =>
+      val propre = nom.trim.replaceAll("\\s+", "_")
+      if (propre == nom) acc else acc.withColumnRenamed(nom, propre)
+    }
+
+  // ------------------------------------------------------------------ //
   // 1. Typage
   // ------------------------------------------------------------------ //
 
@@ -220,5 +246,13 @@ object Transformations {
 
   /** Applique l'ensemble des étapes bronze -> silver dans l'ordre. */
   def preparer(bronze: DataFrame): DataFrame =
-    enrichir(appliquerQualite(marquerRemplaces(dedupliquerParNumero(typerColonnes(bronze)))))
+    enrichir(
+      appliquerQualite(
+        marquerRemplaces(
+          dedupliquerParNumero(
+            typerColonnes(normaliserNomsColonnes(bronze))
+          )
+        )
+      )
+    )
 }

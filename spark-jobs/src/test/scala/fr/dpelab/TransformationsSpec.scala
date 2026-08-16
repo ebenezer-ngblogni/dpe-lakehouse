@@ -58,6 +58,29 @@ class TransformationsSpec extends AnyFunSuite with Matchers with BeforeAndAfterA
 
   // ------------------------------------------------------------------ //
 
+  test("les noms de colonnes corrompus par l'export CSV sont réparés") {
+    // Cas réel : l'API ADEME déclare `conso_5_usages_par_m2_ef` dans son schéma
+    // JSON mais émet `conso_5 usages_par_m2_ef` dans son export CSV.
+    val df = bronze(("X", "", "2024-05-12", "2024-05-12", "2024-05-12", "D", "11069", "75"))
+      .withColumn("conso_5 usages_par_m2_ef", org.apache.spark.sql.functions.lit("73"))
+      .withColumn("emission_ges_5_usages par_m2", org.apache.spark.sql.functions.lit("5"))
+
+    val result = Transformations.normaliserNomsColonnes(df)
+
+    result.columns should contain("conso_5_usages_par_m2_ef")
+    result.columns should contain("emission_ges_5_usages_par_m2")
+    result.columns.exists(_.contains(" ")) shouldBe false
+    // La donnée est préservée, seul le nom change.
+    result.select("conso_5_usages_par_m2_ef").head().getString(0) shouldBe "73"
+  }
+
+  test("la normalisation laisse intactes les colonnes déjà correctes") {
+    val df = bronze(("X", "", "2024-05-12", "2024-05-12", "2024-05-12", "D", "11069", "75"))
+
+    Transformations.normaliserNomsColonnes(df).columns should
+      contain theSameElementsAs df.columns.toSeq
+  }
+
   test("le typage convertit le texte vers date et numérique, sans faire échouer le job") {
     val df = bronze(
       ("A1", "", "2024-05-12", "2024-05-12", "2024-05-12", "D", "11069", "75.5")

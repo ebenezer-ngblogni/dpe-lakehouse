@@ -48,8 +48,10 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
-      - "9000:9000"   # API S3
-      - "9001:9001"   # console web
+      # Ports décalés : 9000/9001 sont souvent déjà pris par une autre
+      # instance MinIO sur le poste.
+      - "9002:9000"   # API S3
+      - "9003:9001"   # console web
     volumes:
       - minio-data:/data
     healthcheck:
@@ -84,8 +86,9 @@ services:
       POSTGRES_USER: ${WAREHOUSE_USER:-dpe}
       POSTGRES_PASSWORD: ${WAREHOUSE_PASSWORD:-dpe}
     ports:
-      # 5433 côté hôte : évite le conflit avec un PostgreSQL déjà installé.
-      - "5433:5432"
+      # 5434 côté hôte : 5432 et 5433 sont fréquemment occupés par un
+      # PostgreSQL local ou un autre projet.
+      - "5434:5432"
     volumes:
       - warehouse-data:/var/lib/postgresql/data
       - ./scripts/init-warehouse.sql:/docker-entrypoint-initdb.d/01-init.sql:ro

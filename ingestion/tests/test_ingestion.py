@@ -87,6 +87,29 @@ def test_le_bom_utf8_ne_pollue_pas_le_nom_de_la_premiere_colonne(config):
 
 
 @responses.activate
+def test_les_noms_de_colonnes_corrompus_sont_normalises(config):
+    """L'export CSV de l'ADEME remplace un underscore par un espace dans
+    certains noms : le schéma déclare `conso_5_usages_par_m2_ef`, le CSV émet
+    `conso_5 usages_par_m2_ef`. Sans réparation, la colonne devient
+    introuvable en aval et disparaît silencieusement du modèle."""
+    corps = (
+        b"\xef\xbb\xbf"
+        b'"numero_dpe","conso_5 usages_par_m2_ef","emission_ges_5_usages par_m2"\n'
+        b'"A1","73","5"\n'
+    )
+    responses.add(responses.GET, LINES_URL, body=corps, status=200)
+
+    page = next(iter(DpeApiClient(config).iter_pages(qs="q", select="s")))
+
+    assert page.column_names == [
+        "numero_dpe",
+        "conso_5_usages_par_m2_ef",
+        "emission_ges_5_usages_par_m2",
+    ]
+    assert page.column("conso_5_usages_par_m2_ef").to_pylist() == ["73"]
+
+
+@responses.activate
 def test_la_pagination_suit_l_entete_link(config):
     page_suivante = f"{LINES_URL}?after=42"
     responses.add(

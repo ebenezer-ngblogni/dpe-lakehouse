@@ -12,7 +12,7 @@ guide permet de le reconstruire à l'identique.
 
 | Champ | Valeur |
 |---|---|
-| Serveur | `localhost:5433` |
+| Serveur | `localhost:5434` |
 | Base de données | `dpe` |
 | Mode | **Importer** |
 | Utilisateur | `powerbi_reader` |

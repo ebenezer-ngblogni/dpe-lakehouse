@@ -17,10 +17,41 @@ import java.util.Properties
   */
 object LoadWarehouseJob {
 
+  /** Colonnes de `dpe_courant` réellement consommées par le modèle dbt.
+    *
+    * Silver en compte 78, `stg_dpe` n'en sélectionne que celles-ci. Charger les
+    * 38 autres coûtait 2,4 Go dans PostgreSQL pour des colonnes qu'aucune
+    * requête n'interroge — le lac reste la référence complète, l'entrepôt ne
+    * porte que ce qui sert.
+    */
+  val ColonnesEntrepot: Seq[String] = Seq(
+    // Identité et temps
+    "numero_dpe", "numero_dpe_immeuble_associe", "date_etablissement_dpe",
+    "date_fin_validite_dpe", "annee_etablissement", "mois_etablissement",
+    "dpe_encore_valide",
+    // Géographie
+    "code_insee_ban", "nom_commune_ban", "code_postal_ban", "code_departement_ban",
+    "code_region_ban", "coordonnee_cartographique_x_ban", "coordonnee_cartographique_y_ban",
+    "geocodage_fiable", "geocodage_precis",
+    // Bâti
+    "type_batiment", "annee_construction", "tranche_age_batiment",
+    "surface_habitable_logement", "tranche_surface", "nombre_niveau_logement",
+    // Performance
+    "etiquette_dpe", "etiquette_ges", "est_passoire_thermique", "est_performant",
+    "conso_5_usages_par_m2_ep", "conso_5_usages_par_m2_ef",
+    "emission_ges_5_usages_par_m2", "ubat_w_par_m2_k",
+    // Coûts
+    "cout_total_5_usages", "cout_chauffage", "cout_ecs",
+    // Équipements et isolation
+    "type_energie_principale_chauffage", "type_generateur_chauffage_principal",
+    "type_energie_principale_ecs", "type_ventilation",
+    "qualite_isolation_enveloppe", "qualite_isolation_murs", "qualite_isolation_menuiseries"
+  )
+
   final case class WarehouseConfig(
       silverPath: String = "data/silver/dpe_courant",
       rejectsPath: String = "data/silver/dpe_rejets",
-      jdbcUrl: String = "jdbc:postgresql://localhost:5433/dpe",
+      jdbcUrl: String = "jdbc:postgresql://localhost:5434/dpe",
       user: String = "dpe",
       password: String = "dpe",
       schema: String = "silver",
@@ -75,7 +106,8 @@ object LoadWarehouseJob {
     props.setProperty("batchsize", config.batchSize.toString)
     props.setProperty("rewriteBatchedStatements", "true")
 
-    charger(spark, config.silverPath, s"${config.schema}.dpe_courant", config, props)
+    charger(spark, config.silverPath, s"${config.schema}.dpe_courant", config, props, ColonnesEntrepot)
+    // Les rejets ne portent déjà que 5 colonnes : rien à projeter.
     charger(spark, config.rejectsPath, s"${config.schema}.dpe_rejets", config, props)
   }
 
@@ -84,7 +116,8 @@ object LoadWarehouseJob {
       source: String,
       table: String,
       config: WarehouseConfig,
-      props: Properties
+      props: Properties,
+      colonnes: Seq[String] = Seq.empty
   ): Unit = {
     import org.apache.spark.sql.functions.col
 
@@ -92,12 +125,22 @@ object LoadWarehouseJob {
 
     // Le filtre porte sur la colonne de partition : Spark élague les répertoires
     // sans les lire, le coût du filtrage est donc nul.
-    val df = config.depuisAnnee match {
+    val filtre = config.depuisAnnee match {
       case Some(annee) if brut.columns.contains("annee_etablissement") =>
         println(s"[warehouse] fenêtre appliquée : annee_etablissement >= $annee")
         brut.filter(col("annee_etablissement") >= annee)
       case _ => brut
     }
+
+    // Projection : Parquet étant orienté colonnes, les colonnes non retenues ne
+    // sont même pas lues sur disque.
+    val retenues = colonnes.filter(filtre.columns.contains)
+    val df =
+      if (retenues.isEmpty) filtre
+      else {
+        println(s"[warehouse] projection : ${retenues.size} colonnes sur ${filtre.columns.length}")
+        filtre.select(retenues.map(col): _*)
+      }
 
     val lignes = df.count()
 

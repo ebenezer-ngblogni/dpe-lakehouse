@@ -236,8 +236,8 @@ make dbt-run && make dbt-test
 | Service | URL | Identifiants |
 |---|---|---|
 | Airflow | http://localhost:8080 | `admin` / `admin` |
-| MinIO | http://localhost:9001 | voir `.env` |
-| Entrepôt | `postgresql://localhost:5433/dpe` | voir `.env` |
+| MinIO | http://localhost:9003 | voir `.env` |
+| Entrepôt | `postgresql://localhost:5434/dpe` | voir `.env` |
 
 ### Suivre l'avancement
 
