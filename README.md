@@ -166,8 +166,22 @@ Résolu par les `--add-opens` dans `build.sbt`.
 - Docker et Docker Compose
 - Java 17 et sbt (`cs install sbt` via [Coursier](https://get-coursier.io/))
 - Python 3.11+
-- ~15 Go d'espace disque libre
 - Power BI Desktop (Windows) pour la restitution
+
+### Espace disque
+
+| Emplacement | Besoin | Contrainte |
+|---|---|---|
+| Lac de données (`data/`) | ~6 Go | N'importe quel système de fichiers, y compris NTFS |
+| Volumes Docker et entrepôt | ~10 Go | **Système de fichiers Linux obligatoire** |
+
+Le lac ne contient que des fichiers Parquet : il peut vivre sur un disque
+externe, y compris en NTFS. Placer `data/` ailleurs se fait par lien symbolique
+ou via la variable `DPE_BRONZE_ROOT`.
+
+Les volumes Docker, eux, ne peuvent pas y aller : PostgreSQL et MinIO tournent
+sous des UID dédiés et doivent posséder leur répertoire de données, or NTFS
+refuse `chown`. `initdb` échouerait au démarrage.
 
 ### Installation
 
