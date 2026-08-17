@@ -100,6 +100,13 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dpe_ci
           PGPASSWORD: postgres
 
+      # `dbt_packages/` n'est pas versionné : sans cette étape, les macros
+      # dbt_utils référencées dans _models.yml sont introuvables et la
+      # compilation échoue.
+      - name: Installer les paquets dbt
+        working-directory: dbt/dpe_analytics
+        run: dbt deps
+
       - name: Vérifier la compilation des modèles
         working-directory: dbt/dpe_analytics
         run: dbt compile --profiles-dir . --target ci
