@@ -6,7 +6,38 @@ guide permet de le reconstruire à l'identique.
 
 ---
 
-## 1. Connexion à l'entrepôt
+## 1. Se connecter aux données
+
+Deux chemins, selon la machine.
+
+### Cas A — Poste en double amorçage (le plus courant ici)
+
+Power BI Desktop n'existe que sous Windows. Redémarrer sous Windows éteint la
+pile Docker, donc PostgreSQL devient injoignable. On passe alors par des
+fichiers déposés sur une partition que les deux systèmes lisent.
+
+Générer l'export depuis Linux :
+
+```bash
+make powerbi-export
+```
+
+Il produit, dans `data/exports/powerbi/` :
+
+| Fichier | Contenu | Taille |
+|---|---|---|
+| `dim_commune.csv` | 34 679 communes | 1,6 Mo |
+| `mart_performance_commune.csv` | 97 763 agrégats commune × année | 11 Mo |
+| `fct_dpe.parquet` | 7,8 M de diagnostics | 266 Mo |
+
+La table de faits est en Parquet et non en CSV : le même contenu pèserait
+~2,5 Go en CSV et mettrait plusieurs minutes à s'importer. Power BI lit le
+Parquet nativement (*Obtenir les données → Fichier → Parquet*).
+
+Sous Windows, ces fichiers se trouvent sur la partition partagée, dans
+`dpelab\data\exports\powerbi\`.
+
+### Cas B — Tout tourne sur la même machine
 
 **Obtenir les données → Base de données PostgreSQL**
 
@@ -26,7 +57,8 @@ Deux points importants :
 - **Mode Import et non DirectQuery.** En Import, le rapport reste consultable
   même quand la pile Docker est éteinte — indispensable pour une démonstration
   en entretien ou un partage sur LinkedIn. DirectQuery afficherait des visuels
-  vides sans la base allumée.
+  vides sans la base allumée. Dans le cas A, l'Import est de toute façon le
+  seul mode possible.
 
 Tables à charger : `marts.fct_dpe`, `marts.dim_commune`,
 `marts.mart_performance_commune`.

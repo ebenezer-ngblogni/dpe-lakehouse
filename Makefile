@@ -155,5 +155,12 @@ dbt-test: ## Exécute les tests dbt
 dbt-docs: ## Génère et sert la documentation dbt (lignage)
 	cd dbt/dpe_analytics && dbt docs generate --profiles-dir . && dbt docs serve --profiles-dir .
 
+# ---------------------------------------------------------------- #
+# Restitution
+# ---------------------------------------------------------------- #
+.PHONY: powerbi-export
+powerbi-export: ## Exporte les marts en CSV/Parquet pour Power BI Desktop
+	$(PYTHON) scripts/export_powerbi.py
+
 $(JAR):
 	$(MAKE) build

@@ -12,12 +12,19 @@ le parc et comment il évolue est une question qui se pose réellement aux
 collectivités, aux bailleurs et aux acteurs de la rénovation.
 
 ```
-   API ADEME              MinIO (S3)                  PostgreSQL           Power BI
+   API ADEME            Lac de fichiers              PostgreSQL           Power BI
   15,3 M de DPE   ──▶   bronze ──▶ silver   ──▶   silver ──▶ marts   ──▶   rapport
                           Parquet partitionné        modèle en étoile
      Python              Spark 3.5 / Scala 2.12            dbt
                     ╰──────────── Airflow ────────────╯
 ```
+
+> Le lac est un répertoire de fichiers Parquet, pas un stockage objet. MinIO est
+> provisionné dans `docker-compose.yml` et le code d'ingestion sait écrire vers
+> S3 (`DPE_BRONZE_ROOT=s3://...`), mais la chaîne a été exécutée sur le système
+> de fichiers : sur une machine unique, le passage par S3 ajoute une latence
+> sans rien apporter. Le dire plutôt que de laisser croire à une architecture
+> qui n'a pas tourné.
 
 ---
 
@@ -26,7 +33,9 @@ collectivités, aux bailleurs et aux acteurs de la rénovation.
 - [Ce que le projet démontre](#ce-que-le-projet-démontre)
 - [Architecture](#architecture)
 - [Les problèmes réels rencontrés](#les-problèmes-réels-rencontrés)
+- [État de validation](#état-de-validation)
 - [Démarrage rapide](#démarrage-rapide)
+- [En cas de problème](#en-cas-de-problème)
 - [Structure du dépôt](#structure-du-dépôt)
 - [Qualité des données](#qualité-des-données)
 - [Tests](#tests)
@@ -113,7 +122,8 @@ mesurée hors cache serveur :
 | **CSV + gzip** | **13,0 s** | **2,0 Mo** |
 
 Le JSON répète les 66 noms de colonnes à chaque ligne. Passer en CSV ramène le
-chargement complet de **~34 h à ~5,5 h**.
+chargement complet de **~34 h à ~5 h** — durée effectivement constatée lors du
+chargement initial.
 
 Conséquence technique : en CSV, le curseur de pagination n'est plus dans le
 corps de la réponse mais dans l'en-tête HTTP `Link: <...>; rel=next`.
@@ -216,7 +226,10 @@ Les six tâches du DAG Airflow ont été exécutées individuellement via
 - Docker et Docker Compose
 - Java 17 et sbt (`cs install sbt` via [Coursier](https://get-coursier.io/))
 - Python 3.11+
-- Power BI Desktop (Windows) pour la restitution
+- Power BI Desktop pour la restitution — **Windows uniquement**. Sur un poste en
+  double amorçage, voir [`powerbi/README.md`](powerbi/README.md) : les tables
+  sont exportées en fichiers sur une partition partagée, car la pile Docker ne
+  tourne pas quand Windows est démarré.
 
 ### Espace disque
 
@@ -236,10 +249,20 @@ refuse `chown`. `initdb` échouerait au démarrage.
 ### Installation
 
 ```bash
-git clone <url-du-dépôt> && cd DataEng
-cp .env.example .env          # puis adapter les mots de passe
+git clone git@github.com:ebenezer-ngblogni/dpe-lakehouse.git
+cd dpe-lakehouse
+cp .env.example .env
 make setup                    # environnement Python
+make spark-runtime            # runtime Spark local (~400 Mo)
 make build                    # compile le jar Spark
+```
+
+Trois variables de `.env` ne sont **pas optionnelles** : sans elles, les
+conteneurs ne peuvent pas écrire dans les répertoires montés depuis l'hôte.
+
+```bash
+id -u                              # → AIRFLOW_UID et HOST_UID
+stat -c %g /var/run/docker.sock    # → DOCKER_GID
 ```
 
 ### Un premier essai en deux minutes
@@ -254,6 +277,8 @@ make silver                   # transformation Spark en local
 ```bash
 make up                       # MinIO + PostgreSQL + Spark + Airflow
 make ingest-full              # ~5 h, interruptible et reprenable
+make silver                   # bronze → silver (Spark/Scala)
+make warehouse                # silver → PostgreSQL, fenêtre depuis 2024
 make dbt-run && make dbt-test
 ```
 
@@ -299,7 +324,7 @@ pile Docker. Vérifier avec `ss -ltn`.
 │   │   ├── api.py        Client Data Fair, pagination CSV, réessais
 │   │   ├── sink.py       Écriture Parquet atomique + manifestes
 │   │   ├── backfill.py   Découpage mensuel et reprise
-│   │   └── columns.py    63 colonnes retenues sur 230
+│   │   └── columns.py    66 colonnes retenues sur 230
 │   └── tests/
 ├── spark-jobs/           Jobs Spark en Scala
 │   └── src/main/scala/fr/dpelab/
@@ -308,8 +333,13 @@ pile Docker. Vérifier avec `ss -ltn`.
 ├── dbt/dpe_analytics/    Modélisation en étoile et tests de données
 ├── airflow/dags/         Orchestration hebdomadaire
 ├── docker/               Images Spark et Airflow
-├── powerbi/              Modèle et captures du rapport
-└── scripts/              Initialisation de l'entrepôt
+├── powerbi/              Guide de construction du rapport et captures
+├── scripts/
+│   ├── init-warehouse.sql    Schémas et rôle lecture seule
+│   └── export_powerbi.py     Export des marts en CSV / Parquet
+├── tools/                Runtime Spark local (non versionné)
+├── Makefile              Toutes les commandes du projet
+└── .github/workflows/    Intégration continue
 ```
 
 ---
@@ -345,13 +375,18 @@ make test        # Scala + Python
 make lint
 ```
 
-**Scala (11 tests)** — typage tolérant aux valeurs illisibles, déduplication,
-chaînes de remplacement à trois maillons, règles de qualité, idempotence de la
-chaîne complète.
+**Scala (15 tests)** — normalisation des noms de colonnes corrompus par la
+source, typage tolérant aux valeurs illisibles, déduplication, chaînes de
+remplacement à trois maillons, règles de qualité, drapeaux de géocodage,
+idempotence de la chaîne complète.
 
-**Python (14 tests)** — découpage mensuel, pagination par en-tête `Link`, BOM
-UTF-8, réessai sur erreur 5xx, écriture atomique, détection d'écart avec la
-source, non-duplication en cas de réécriture.
+**Python (15 tests)** — découpage mensuel, pagination par en-tête `Link`, BOM
+UTF-8, noms de colonnes corrompus, réessai sur erreur 5xx, écriture atomique,
+détection d'écart avec la source, non-duplication en cas de réécriture.
+
+**dbt (24 tests de données)** — unicité et non-nullité des clés, valeurs
+acceptées, intégrité référentielle entre faits et dimension, bornes de
+plausibilité, fraîcheur de la source.
 
 Les tests Python n'appellent jamais le réseau : l'API est simulée, la suite est
 déterministe et tourne en CI sans dépendre de la disponibilité de l'ADEME.
@@ -360,15 +395,16 @@ déterministe et tourne en CI sans dépendre de la disponibilité de l'ADEME.
 
 ## Limites connues
 
-- **Le chargement initial prend ~5,5 h.** L'API ADEME ne propose pas de
-  téléchargement en masse : les deux jeux exposés sont virtuels et n'ont pas de
-  fichier source téléchargeable. La pagination est donc la seule voie.
+- **Le chargement initial prend environ 5 h** (mesuré : 4 h 47 pour 50 des 62
+  partitions mensuelles). L'API ADEME ne propose pas de téléchargement en
+  masse : les deux jeux exposés sont virtuels et n'ont pas de fichier source
+  téléchargeable. La pagination est donc la seule voie.
 - **Pas de SCD2 sur l'historique des DPE.** Le modèle conserve l'état courant.
   Suivre l'évolution d'un logement dans le temps demanderait des `snapshots` dbt
   sur `numero_dpe`, ce qui n'a d'intérêt qu'avec plusieurs mois de collecte.
 - **Coordonnées en Lambert 93.** Power BI attend du WGS84 pour ses cartes ; la
   conversion est faite côté rapport plutôt que dans le pipeline.
-- **Volumétrie réduite à 63 colonnes sur 230.** Les ~170 champs écartés
+- **Volumétrie réduite à 66 colonnes sur 230.** Les ~164 champs écartés
   détaillent les générateurs de chauffage et d'ECS, sans usage analytique ici.
   Le choix divise l'empreinte disque par quatre.
 
