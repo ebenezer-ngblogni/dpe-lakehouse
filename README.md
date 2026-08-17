@@ -271,6 +271,26 @@ make ingest-status            # compare chaque partition locale à la source
 
 ---
 
+## En cas de problème
+
+**Airflow refuse `admin` / `admin`.** Si le premier démarrage a été interrompu,
+le compte peut exister avec un mot de passe incomplet ; `airflow-init` affiche
+alors `admin already exist in the db` et ne le corrige pas. Remède :
+
+```bash
+docker exec dpe_airflow_web airflow users reset-password \
+  --username admin --password admin
+```
+
+**Conflit de ports au démarrage.** Le projet utilise 5434 (entrepôt), 9002/9003
+(MinIO) et 8080 (Airflow). Les ports 5432, 5433, 9000 et 9001 sont
+volontairement évités, souvent déjà pris par un PostgreSQL local ou une autre
+pile Docker. Vérifier avec `ss -ltn`.
+
+**Tâches Spark en échec sur les droits.** Renseigner `HOST_UID` et
+`AIRFLOW_UID` dans `.env` avec la sortie de `id -u`, et `DOCKER_GID` avec
+`stat -c %g /var/run/docker.sock`, puis recréer les conteneurs.
+
 ## Structure du dépôt
 
 ```
