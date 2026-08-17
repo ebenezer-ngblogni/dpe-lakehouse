@@ -1,5 +1,7 @@
 # Lakehouse DPE — de l'API ADEME à Power BI
 
+[![CI](https://github.com/ebenezer-ngblogni/dpe-lakehouse/actions/workflows/ci.yml/badge.svg)](https://github.com/ebenezer-ngblogni/dpe-lakehouse/actions/workflows/ci.yml)
+
 Pipeline de données complet sur les **diagnostics de performance énergétique des
 logements français** : 15,3 millions d'enregistrements réels, ingérés depuis
 l'API publique de l'ADEME, nettoyés par un job **Spark en Scala**, modélisés en
