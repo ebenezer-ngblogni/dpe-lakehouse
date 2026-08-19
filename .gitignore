@@ -1,8 +1,9 @@
-# Données : jamais versionnées, elles se régénèrent depuis l'API.
-# Sans barre oblique finale, le motif couvre aussi le cas où `data` est un lien
-# symbolique vers un autre disque — un lien versionné pointerait vers un chemin
-# propre à une machine et serait mort après clonage.
-data
+# Le lac : jamais versionné, il se régénère depuis l'API.
+# La barre oblique initiale ancre le motif à la racine du dépôt : sans elle,
+# tout répertoire nommé `data` serait exclu, y compris `powerbi/data/` qui
+# contient les exports agrégés publiés à dessein. L'absence de barre oblique
+# finale couvre le cas où `data` est un lien symbolique vers un autre disque.
+/data
 *.parquet
 logs_backfill.log
 
