@@ -34,3 +34,6 @@ dbt/dpe_analytics/logs/
 
 # Runtime Spark telecharge localement
 tools/
+
+# Sorties et fichiers de travail de Playwright MCP
+.playwright-mcp/
