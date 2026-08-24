@@ -55,6 +55,12 @@ class Table:
 TABLES = [
     Table("marts", "dim_commune", "csv", reprojeter=True),
     Table("marts", "mart_performance_commune", "csv", reprojeter=True),
+    # Agrégat départemental : c'est lui qui alimente la carte de France. Les
+    # centroïdes des DOM sortent des bornes métropolitaines et ressortent donc
+    # sans coordonnées — voulu, la colonne `est_metropole` rend le filtre
+    # explicite côté rapport.
+    Table("marts", "mart_performance_departement", "csv", reprojeter=True),
+    Table("marts", "mart_profil_batiment", "csv"),
     Table("marts", "fct_dpe", "parquet"),
 ]
 

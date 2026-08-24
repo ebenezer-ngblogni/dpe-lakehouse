@@ -34,6 +34,22 @@ models:
       +grants:
         select: ["powerbi_reader"]
 
+seeds:
+  dpe_analytics:
+    +schema: marts
+    +grants:
+      select: ["powerbi_reader"]
+    ref_departement:
+      # Types explicites plutôt qu'inférés. Les codes département sont du
+      # texte, pas des nombres : « 01 » perdrait son zéro initial et « 2A »
+      # ferait échouer la conversion. Le même piège existe côté Power BI, où
+      # l'auto-typage des codes INSEE est corrigé à la main.
+      +column_types:
+        code_departement: varchar(3)
+        nom_departement: varchar(64)
+        nom_region: varchar(64)
+        est_metropole: boolean
+
 vars:
   # Seuil réglementaire : F et G désignent les passoires thermiques au sens de
   # la loi Climat et Résilience.

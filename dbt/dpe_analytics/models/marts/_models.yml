@@ -114,3 +114,110 @@ models:
         description: Nombre de diagnostics de la commune pour l'année.
         data_tests:
           - not_null
+
+  - name: mart_performance_departement
+    description: >
+      Agrégat par département, toutes années confondues. Table de référence de
+      la carte de France : 104 lignes au lieu des 23 628 communes géolocalisées,
+      seule échelle à laquelle une carte nationale reste lisible.
+      Les taux y sont pré-calculés car le modèle sémantique Power BI est en
+      lecture seule et n'accepte pas de mesure DAX.
+    data_tests:
+      # Le grain est le cœur du contrat de cette table : une ligne par
+      # département. S'il se dédouble, Power BI moyennerait des taux entre eux
+      # et la carte deviendrait fausse sans rien signaler.
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [code_departement]
+      # Cohérence arithmétique : la somme des étiquettes doit retomber sur le
+      # total. Un écart signalerait une étiquette hors A-G échappée du silver.
+      - dbt_utils.expression_is_true:
+          expression: >
+            nb_etiquette_a + nb_etiquette_b + nb_etiquette_c + nb_etiquette_d
+            + nb_etiquette_e + nb_etiquette_f + nb_etiquette_g = nb_dpe
+      # Les passoires sont exactement F et G, par définition réglementaire.
+      - dbt_utils.expression_is_true:
+          expression: "nb_etiquette_f + nb_etiquette_g = nb_passoires"
+      - dbt_utils.expression_is_true:
+          expression: "nb_etiquette_a + nb_etiquette_b = nb_logements_performants"
+    columns:
+      - name: code_departement
+        description: >
+          Code INSEE du département, clé de la table. Nul pour l'unique ligne
+          dont la source ne fournit aucun code exploitable — d'où l'absence de
+          test not_null ici, assumée et documentée dans le modèle.
+        data_tests:
+          - unique
+      - name: nom_departement
+        description: Libellé issu du seed ref_departement.
+        data_tests:
+          - not_null
+      - name: est_metropole
+        description: >
+          Faux pour les DOM et les collectivités d'outre-mer. La carte de
+          France métropolitaine filtre sur cet indicateur ; sans lui, la
+          Nouvelle-Calédonie écraserait l'échelle de la carte.
+        data_tests:
+          - not_null
+      - name: taux_passoires_pct
+        description: Part des logements F ou G, rapport de sommes.
+        data_tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              inclusive: true
+      - name: taux_performants_pct
+        description: Part des logements A ou B, rapport de sommes.
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              inclusive: true
+      - name: nb_dpe
+        data_tests:
+          - not_null
+      - name: nb_communes
+        description: Nombre de communes géolocalisées ayant servi au centroïde.
+
+  - name: mart_profil_batiment
+    description: >
+      Performance croisée par type de logement et période de construction.
+      Porte le résultat le plus démonstratif du jeu de données : la chute de la
+      part de passoires après la réglementation thermique de 1974.
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [type_batiment, tranche_age_batiment]
+    columns:
+      - name: type_batiment
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: ["maison", "appartement"]
+      - name: tranche_age_batiment
+        data_tests:
+          - not_null
+      - name: taux_passoires_pct
+        data_tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+              inclusive: true
+      - name: nb_dpe
+        data_tests:
+          - not_null
+
+seeds:
+  - name: ref_departement
+    description: >
+      Référentiel des départements et collectivités françaises. Versionné dans
+      le dépôt plutôt que chargé depuis une source externe : 108 lignes qui ne
+      changent qu'au gré des réformes territoriales, autant les figer et les
+      relire en revue de code.
+    columns:
+      - name: code_departement
+        data_tests:
+          - unique
+          - not_null
+      - name: nom_departement
+        data_tests:
+          - not_null
