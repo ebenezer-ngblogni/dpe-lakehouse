@@ -1,0 +1,597 @@
+<title>Architecture du pipeline DPE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Public+Sans:wght@400;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+
+<style>
+:root {
+  --dpe-a: #008550;
+  --dpe-e: #fcb700;
+
+  --ground: #eceef2;
+  --grid-dot: #c6ccd6;
+  --surface: #ffffff;
+  --surface-2: #f4f6f9;
+  --ink: #12171d;
+  --ink-2: #4a5561;
+  --ink-3: #7b8593;
+  --rule: #d5dae2;
+  --rule-strong: #b6bfcb;
+  --wire: #a8b2bf;
+  --node-shadow: 0 1px 2px rgba(18, 23, 29, .07), 0 3px 8px rgba(18, 23, 29, .05);
+
+  --shell: min(1180px, 92vw);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0b0e13;
+    --grid-dot: #232a34;
+    --surface: #161c24;
+    --surface-2: #1d242e;
+    --ink: #e7ecf2;
+    --ink-2: #a3aeba;
+    --ink-3: #737f8d;
+    --rule: #2a3340;
+    --rule-strong: #3b4655;
+    --wire: #46525f;
+    --node-shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 4px 12px rgba(0, 0, 0, .35);
+    --dpe-a: #14a869;
+    --dpe-e: #ffc42b;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #0b0e13;
+  --grid-dot: #232a34;
+  --surface: #161c24;
+  --surface-2: #1d242e;
+  --ink: #e7ecf2;
+  --ink-2: #a3aeba;
+  --ink-3: #737f8d;
+  --rule: #2a3340;
+  --rule-strong: #3b4655;
+  --wire: #46525f;
+  --node-shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 4px 12px rgba(0, 0, 0, .35);
+  --dpe-a: #14a869;
+  --dpe-e: #ffc42b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell { width: var(--shell); margin-inline: auto; }
+
+header { padding-block: clamp(2.6rem, 6vw, 4rem) 1.8rem; }
+.kicker {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .72rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 1.1rem;
+}
+h1 {
+  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -.022em;
+  line-height: 1.05;
+  font-size: clamp(2rem, 4.6vw, 3.2rem);
+  margin: 0 0 1rem;
+  max-width: 20ch;
+  text-wrap: balance;
+}
+.sub { color: var(--ink-2); max-width: 62ch; margin: 0; font-size: 1.06rem; }
+
+/* ---------- le canevas ---------- */
+
+.canvas-wrap {
+  position: relative;
+  margin-block: 1.6rem 1.2rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background:
+    radial-gradient(var(--grid-dot) 1px, transparent 1px) 0 0 / 22px 22px,
+    var(--surface-2);
+  overflow: auto;
+  overscroll-behavior-x: contain;
+}
+.canvas-scroll { padding: 26px; }
+.canvas {
+  position: relative;
+  width: 2080px;
+  height: 620px;
+  transform-origin: 0 0;
+}
+
+svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+svg.wires path { fill: none; stroke: var(--wire); stroke-width: 1.5; }
+svg.wires path.dashed { stroke-dasharray: 4 4; stroke-width: 1.2; }
+svg.wires circle.port { fill: var(--surface); stroke: var(--wire); stroke-width: 1.3; }
+
+/* nœud carré : une tâche Airflow */
+.node {
+  position: absolute;
+  width: 76px;
+  height: 76px;
+  border-radius: 9px;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  box-shadow: var(--node-shadow);
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+}
+.node.terminal {
+  width: 34px; height: 34px; border-radius: 50%;
+  border-style: solid; background: var(--surface-2);
+}
+.node.data {
+  width: 190px; height: 60px; border-radius: 7px;
+  grid-template-columns: auto 1fr;
+  place-items: center start;
+  gap: .6rem;
+  padding: 0 .85rem;
+  border-color: var(--rule);
+}
+.node.manual { border-style: dashed; }
+
+.node svg { display: block; }
+
+.label {
+  position: absolute;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.label .t {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .755rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  letter-spacing: -.01em;
+}
+.label .s {
+  font-size: .685rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+  line-height: 1.35;
+  margin-top: 1px;
+}
+
+/* texte intégré au nœud large */
+.node.data .dt {
+  font-family: "JetBrains Mono", monospace;
+  font-size: .72rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.node.data .ds {
+  font-size: .655rem;
+  color: var(--ink-3);
+  line-height: 1.3;
+}
+
+/* pastille runtime, accrochée sous une tâche */
+.runtime {
+  position: absolute;
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  box-shadow: var(--node-shadow);
+  display: grid;
+  place-items: center;
+  font-family: "JetBrains Mono", monospace;
+  font-size: .62rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  letter-spacing: -.02em;
+}
+
+.wire-tag {
+  position: absolute;
+  font-family: "JetBrains Mono", monospace;
+  font-size: .62rem;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  padding: 0 .28rem;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+}
+
+/* cartouche de zone */
+.zone {
+  position: absolute;
+  border: 1px dashed var(--rule-strong);
+  border-radius: 10px;
+  pointer-events: none;
+}
+.zone-tag {
+  position: absolute;
+  font-family: "JetBrains Mono", monospace;
+  font-size: .63rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  padding: 0 .4rem;
+  transform: translateY(-50%);
+}
+
+/* ---------- légende & notes ---------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem 1.5rem;
+  align-items: center;
+  font-size: .8rem;
+  color: var(--ink-2);
+  padding-bottom: 2.4rem;
+}
+.legend .item { display: flex; align-items: center; gap: .45rem; }
+.swatch {
+  width: 26px; height: 18px; border-radius: 4px;
+  background: var(--surface); border: 1px solid var(--rule-strong);
+  flex: none;
+}
+.swatch.dash { border-style: dashed; }
+.swatch.round { width: 18px; border-radius: 50%; }
+.swatch.wire {
+  height: 0; border: 0; border-top: 1.5px solid var(--wire);
+  border-radius: 0; width: 26px;
+}
+.swatch.wire-dash { border-top-style: dashed; }
+
+.notes {
+  border-top: 1px solid var(--rule);
+  padding-block: clamp(2.4rem, 5vw, 3.4rem);
+  display: grid;
+  gap: 1.1rem;
+}
+@media (min-width: 860px) { .notes { grid-template-columns: repeat(3, 1fr); } }
+.note {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 1.35rem 1.3rem;
+}
+.note h2 {
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-weight: 800;
+  font-size: 1.08rem;
+  letter-spacing: -.012em;
+  margin: 0 0 .65rem;
+}
+.note p { margin: 0 0 .7rem; font-size: .89rem; color: var(--ink-2); }
+.note p:last-child { margin-bottom: 0; }
+.note strong { color: var(--ink); font-weight: 600; }
+.note code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: .82em;
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: .05em .32em;
+}
+
+footer {
+  border-top: 1px solid var(--rule);
+  padding-block: 2.2rem 3.2rem;
+  font-size: .84rem;
+  color: var(--ink-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: .8rem 2rem;
+  justify-content: space-between;
+  align-items: baseline;
+}
+footer a { color: inherit; text-underline-offset: .2em; }
+:focus-visible { outline: 2px solid var(--dpe-a); outline-offset: 3px; }
+
+.hint {
+  font-family: "JetBrains Mono", monospace;
+  font-size: .68rem;
+  color: var(--ink-3);
+  margin: 0 0 1.4rem;
+}
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="shell">
+  <header>
+    <div class="kicker">DPE Lakehouse · orchestration</div>
+    <h1>Six tâches, une seule bifurcation</h1>
+    <p class="sub">
+      Le DAG Airflow tel qu'il tourne réellement&nbsp;: un enchaînement linéaire de six tâches,
+      dont une seule produit deux sorties. Les volumes affichés sont ceux relevés en base.
+    </p>
+  </header>
+
+  <p class="hint">↔ Faire défiler horizontalement pour parcourir la chaîne</p>
+
+  <div class="canvas-wrap">
+    <div class="canvas-scroll">
+      <div class="canvas" id="canvas">
+        <svg class="wires" id="wires" viewBox="0 0 2080 620" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="item"><span class="swatch"></span> Tâche Airflow</span>
+    <span class="item"><span class="swatch round"></span> Runtime mobilisé</span>
+    <span class="item"><span class="swatch dash"></span> Hors DAG, lancé à la main</span>
+    <span class="item"><span class="swatch wire"></span> Dépendance de tâche</span>
+    <span class="item"><span class="swatch wire wire-dash"></span> Artefact produit</span>
+  </div>
+
+  <section class="notes">
+    <div class="note">
+      <h2>Pourquoi une seule bifurcation</h2>
+      <p>
+        Le job Spark écrit deux jeux&nbsp;: les lignes retenues et les lignes rejetées.
+        <strong>Chaque rejet garde son motif</strong> — surface hors bornes, étiquette absente,
+        géocodage non fiable.
+      </p>
+      <p>
+        Un rejet silencieux est une donnée perdue sans trace. Ici les
+        <strong>720 483 lignes écartées</strong> restent interrogeables.
+      </p>
+    </div>
+
+    <div class="note">
+      <h2>Chaque étape est reprenable</h2>
+      <p>
+        L'ingestion écrit par partition mensuelle, en promotion atomique&nbsp;: un
+        <code>_manifest.json</code> atteste la complétude avant que la partition ne devienne visible.
+      </p>
+      <p>
+        Le job Spark relit tout le bronze et réécrit le silver en
+        <code>partitionOverwriteMode=dynamic</code>. Le chargement tronque puis recharge.
+        <strong>Rejouer le DAG ne duplique rien.</strong>
+      </p>
+    </div>
+
+    <div class="note">
+      <h2>Ce qui reste manuel</h2>
+      <p>
+        L'export vers Power BI n'est pas dans le DAG. Il tourne à la demande, parce que le
+        rapport lit des CSV publiés sur GitHub&nbsp;: <strong>l'actualisation dépend d'un
+        <code>git push</code></strong>, pas d'une tâche planifiée.
+      </p>
+      <p>
+        C'est une limite assumée du montage, pas un oubli — automatiser demanderait un
+        jeton d'écriture dans l'orchestrateur.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <div>
+      <strong style="color: var(--ink)">Eben Ezer NGBLOGNI</strong> · Airflow 2.10.4 · LocalExecutor · Docker Compose
+    </div>
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: .78rem">
+      <a href="https://github.com/ebenezer-ngblogni/dpe-lakehouse">github.com/ebenezer-ngblogni/dpe-lakehouse</a>
+    </div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const W = 76, H = 76;          // tâche
+  const TW = 34;                 // terminal
+  const DW = 190, DH = 60;       // nœud de données
+  const RW = 54;                 // runtime
+  const Y = 250;                 // haut des tâches sur l'axe principal
+  const CY = Y + H / 2;          // axe des ports
+
+  // Icônes : formes géométriques simples, dessinées pour ce qu'elles font.
+  const ico = {
+    down:  '<path d="M12 3v11m0 0 4.5-4.5M12 14l-4.5-4.5" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" fill="none" stroke-width="1.8" stroke-linecap="round"/>',
+    funnel:'<path d="M3 4h18l-7 8v7l-4 2v-9L3 4Z" fill="none" stroke-width="1.7" stroke-linejoin="round"/>',
+    db:    '<ellipse cx="12" cy="6" rx="7.5" ry="3" fill="none" stroke-width="1.7"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6" fill="none" stroke-width="1.7"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3" fill="none" stroke-width="1.7"/>',
+    layers:'<path d="M12 3 3 7.5 12 12l9-4.5L12 3Z" fill="none" stroke-width="1.7" stroke-linejoin="round"/><path d="m3 12.5 9 4.5 9-4.5" fill="none" stroke-width="1.7" stroke-linejoin="round"/><path d="m3 17 9 4.5 9-4.5" fill="none" stroke-width="1.7" stroke-linejoin="round"/>',
+    check: '<circle cx="12" cy="12" r="8.5" fill="none" stroke-width="1.7"/><path d="m8.2 12.3 2.6 2.6 5-5.4" fill="none" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
+    doc:   '<path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" fill="none" stroke-width="1.7" stroke-linejoin="round"/><path d="M14 3v5h5M8.5 13h7M8.5 16.5h7" fill="none" stroke-width="1.6" stroke-linecap="round"/>',
+    out:   '<path d="M13 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" fill="none" stroke-width="1.7" stroke-linecap="round"/><path d="M20 4h-6m6 0v6m0-6-8 8" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    chart: '<path d="M4 20V9.5M10 20V4M16 20v-7M22 20H2" fill="none" stroke-width="1.9" stroke-linecap="round"/>',
+    slash: '<circle cx="12" cy="12" r="8.5" fill="none" stroke-width="1.7"/><path d="m7.6 16.4 8.8-8.8" fill="none" stroke-width="1.8" stroke-linecap="round"/>',
+    dot:   '<circle cx="12" cy="12" r="3.4"/>'
+  };
+
+  // ── Les nœuds. x/y = coin supérieur gauche dans l'espace du canevas.
+  const nodes = [
+    { id:'debut', x:44,   y:CY - TW/2, w:TW, h:TW, kind:'terminal', icon:'dot',
+      t:'debut', s:'EmptyOperator' },
+
+    { id:'ing',   x:150,  y:Y, w:W, h:H, icon:'down',
+      t:'ingestion_bronze', s:'15,3 M lignes · Parquet' },
+
+    { id:'spk',   x:370,  y:Y, w:W, h:H, icon:'funnel',
+      t:'spark_bronze_vers_silver', s:'déduplication · qualité' },
+
+    { id:'rej',   x:560,  y:60, w:DW, h:DH, kind:'data', icon:'slash',
+      dt:'silver/dpe_rejets', ds:'720 483 lignes, motif conservé' },
+
+    { id:'load',  x:640,  y:Y, w:W, h:H, icon:'db',
+      t:'chargement_entrepot', s:'7 849 191 lignes' },
+
+    { id:'run',   x:860,  y:Y, w:W, h:H, icon:'layers',
+      t:'dbt_run', s:'schéma en étoile' },
+
+    { id:'test',  x:1080, y:Y, w:W, h:H, icon:'check',
+      t:'dbt_test', s:'42 ✓ · 2 ✗ assumés' },
+
+    { id:'docs',  x:1300, y:Y, w:W, h:H, icon:'doc',
+      t:'dbt_docs_generate', s:'lignage régénéré' },
+
+    { id:'fin',   x:1520, y:CY - TW/2, w:TW, h:TW, kind:'terminal', icon:'dot',
+      t:'fin', s:'EmptyOperator' },
+
+    { id:'exp',   x:1660, y:Y, w:W, h:H, kind:'manual', icon:'out',
+      t:'export_powerbi.py', s:'CSV + reprojection' },
+
+    { id:'bi',    x:1900, y:Y, w:W, h:H, kind:'manual', icon:'chart',
+      t:'Power BI Service', s:'96 départements' }
+  ];
+
+  // ── Runtimes accrochés sous une tâche.
+  const runtimes = [
+    { under:'ing',  y:430, txt:'ADEME', tag:'API Data Fair' },
+    { under:'spk',  y:430, txt:'Spark', tag:'3.5.3 · Scala 2.12' },
+    { under:'load', y:430, txt:'PgSQL', tag:'PostgreSQL 16' },
+    { under:'run',  y:430, txt:'dbt',   tag:'dbt-core 1.9.1' }
+  ];
+
+  // ── Les liens. tag facultatif, posé au milieu du fil.
+  const edges = [
+    ['debut','ing'], ['ing','spk'],
+    ['spk','rej', 'rejets'], ['spk','load', 'courant'],
+    ['load','run'], ['run','test'], ['test','docs'], ['docs','fin'],
+    ['fin','exp', 'manuel'], ['exp','bi']
+  ];
+
+  const byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+  const canvas = document.getElementById('canvas');
+  const svg = document.getElementById('wires');
+  const NS = 'http://www.w3.org/2000/svg';
+
+  const rightPort = n => ({ x: n.x + n.w, y: n.y + n.h / 2 });
+  const leftPort  = n => ({ x: n.x,       y: n.y + n.h / 2 });
+
+  // ── Fils : béziers à tangentes horizontales, comme un éditeur de flux.
+  edges.forEach(([from, to, tag]) => {
+    const a = rightPort(byId[from]), b = leftPort(byId[to]);
+    const dx = Math.max(40, Math.abs(b.x - a.x) * 0.45);
+    const p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', `M ${a.x} ${a.y} C ${a.x + dx} ${a.y}, ${b.x - dx} ${b.y}, ${b.x} ${b.y}`);
+    if (from === 'fin') p.classList.add('dashed');
+    svg.appendChild(p);
+
+    [[a.x, a.y], [b.x, b.y]].forEach(([cx, cy]) => {
+      const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', 3.4);
+      c.setAttribute('class', 'port');
+      svg.appendChild(c);
+    });
+
+    if (tag) {
+      const el = document.createElement('span');
+      el.className = 'wire-tag';
+      el.textContent = tag;
+      el.style.left = ((a.x + b.x) / 2) + 'px';
+      el.style.top  = ((a.y + b.y) / 2 + (b.y < a.y ? -12 : 12)) + 'px';
+      canvas.appendChild(el);
+    }
+  });
+
+  // ── Fils pointillés vers les runtimes.
+  runtimes.forEach(r => {
+    const n = byId[r.under];
+    const x = n.x + n.w / 2;
+    const p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', `M ${x} ${n.y + n.h} L ${x} ${r.y}`);
+    p.setAttribute('class', 'dashed');
+    svg.appendChild(p);
+  });
+
+  // ── Nœuds.
+  nodes.forEach(n => {
+    const el = document.createElement('div');
+    el.className = 'node' + (n.kind ? ' ' + n.kind : '');
+    el.style.left = n.x + 'px';
+    el.style.top = n.y + 'px';
+
+    const size = n.kind === 'terminal' ? 15 : (n.kind === 'data' ? 19 : 26);
+    const glyph = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" style="color: ${n.id === 'rej' ? 'var(--dpe-e)' : 'currentColor'}">
+        ${n.icon === 'dot' ? ico[n.icon].replace(/fill="none"/g, '') : ico[n.icon]}
+      </svg>`;
+
+    if (n.kind === 'data') {
+      el.innerHTML = glyph + `<span><span class="dt">${n.dt}</span><br><span class="ds">${n.ds}</span></span>`;
+      el.querySelector('svg').setAttribute('fill', 'none');
+    } else {
+      el.innerHTML = glyph;
+      if (n.icon === 'dot') el.querySelector('svg').setAttribute('fill', 'currentColor');
+    }
+    canvas.appendChild(el);
+
+    // libellé sous le nœud
+    if (n.t) {
+      const lab = document.createElement('div');
+      lab.className = 'label';
+      lab.style.left = (n.x + n.w / 2) + 'px';
+      lab.style.top  = (n.y + n.h + 9) + 'px';
+      lab.innerHTML = `<div class="t">${n.t}</div><div class="s">${n.s}</div>`;
+      canvas.appendChild(lab);
+    }
+  });
+
+  // ── Pastilles runtime + leur légende.
+  runtimes.forEach(r => {
+    const n = byId[r.under];
+    const cx = n.x + n.w / 2;
+    const el = document.createElement('div');
+    el.className = 'runtime';
+    el.style.left = (cx - RW / 2) + 'px';
+    el.style.top = r.y + 'px';
+    el.textContent = r.txt;
+    canvas.appendChild(el);
+
+    const lab = document.createElement('div');
+    lab.className = 'label';
+    lab.style.left = cx + 'px';
+    lab.style.top = (r.y + RW + 7) + 'px';
+    lab.innerHTML = `<div class="s">${r.tag}</div>`;
+    canvas.appendChild(lab);
+  });
+
+  // ── Cartouche « hors DAG » autour des deux dernières étapes.
+  const z = document.createElement('div');
+  z.className = 'zone';
+  z.style.left = '1620px'; z.style.top = '196px';
+  z.style.width = '396px'; z.style.height = '190px';
+  canvas.appendChild(z);
+
+  const zt = document.createElement('div');
+  zt.className = 'zone-tag';
+  zt.style.left = '1644px'; zt.style.top = '196px';
+  zt.textContent = 'Hors DAG · lancé à la main';
+  canvas.appendChild(zt);
+
+  // ── Mise à l'échelle : le canevas fait 2080 px de large, on le réduit
+  //    pour qu'il tienne dans le conteneur quand la place manque.
+  const wrap = document.querySelector('.canvas-wrap');
+  const scroll = document.querySelector('.canvas-scroll');
+  const BASE_W = 2080, BASE_H = 620, PAD = 52;
+
+  let dernierK = null;
+  function fit() {
+    const dispo = wrap.clientWidth - PAD;
+    const k = Math.round(Math.min(1, dispo / BASE_W) * 1000) / 1000;
+    if (k === dernierK) return;   // sinon l'observateur réagit à son propre effet
+    dernierK = k;
+    canvas.style.transform = k < 1 ? `scale(${k})` : '';
+    scroll.style.width = (BASE_W * k + PAD) + 'px';
+    scroll.style.height = (BASE_H * k + PAD) + 'px';
+  }
+  fit();
+  new ResizeObserver(fit).observe(wrap);
+})();
+</script>
