@@ -1,238 +1,139 @@
-# Rapport Power BI — Performance énergétique du parc de logements
+# Restitution Power BI
 
-Ce dossier documente la couche restitution. Le fichier `.pbix` n'est pas
-versionné (il embarque les données importées, plusieurs centaines de Mo) : ce
-guide permet de le reconstruire à l'identique.
+Ce dossier documente la couche de restitution : ce qui existe réellement, et
+les contraintes qui en ont dicté la forme.
 
 ---
 
-## 1. Se connecter aux données
+## Ce qui est publié
 
-Deux chemins, selon la machine.
+| Objet | Contenu |
+|---|---|
+| Modèle sémantique `DPE Départements France` | La table `Départements` (105 lignes), alimentée par `powerbi/data/mart_performance_departement.csv` |
+| Rapport `Passoires thermiques par département` | Une page, quatre visuels, filtrée sur la France métropolitaine |
 
-### Cas A — Poste en double amorçage (le plus courant ici)
+Les CSV de `powerbi/data/` sont versionnés volontairement : Power BI Service
+les lit par leur URL brute GitHub. C'est le seul chemin d'ingestion disponible
+ici, faute de licence OneDrive pour téléverser un fichier.
 
-Power BI Desktop n'existe que sous Windows. Redémarrer sous Windows éteint la
-pile Docker, donc PostgreSQL devient injoignable. On passe alors par des
-fichiers déposés sur une partition que les deux systèmes lisent.
+---
 
-Générer l'export depuis Linux :
+## La contrainte qui explique tout le reste
+
+Le modèle sémantique est créé en **« création rapide »**, donc en lecture
+seule : **aucune mesure DAX ne peut y être ajoutée**. L'édition du modèle
+demande une capacité Fabric ou Premium, absente de ce compte.
+
+Trois conséquences, toutes assumées dans la modélisation dbt :
+
+1. **Les taux sont des colonnes pré-calculées**, pas des mesures. Ils sont
+   calculés en SQL comme un rapport de sommes — `SUM(passoires) / SUM(dpe)` —
+   jamais comme une moyenne de taux.
+
+2. **Le grain de la table colle exactement à ce que le visuel affiche** : une
+   ligne par département, toutes années confondues. Si la table avait gardé le
+   grain département × année, Power BI aurait moyenné les taux annuels entre
+   eux, ce qui n'a aucun sens dès que les dénominateurs diffèrent.
+
+3. **Aucun indicateur de la page n'agrège un taux.** Les deux cartes affichent
+   des comptages, qui se somment sans risque. Un indicateur « taux national »
+   aurait exigé une mesure DAX : il est donc absent plutôt que faux. La valeur
+   exacte, 8,69 %, figure dans le titre de la page.
+
+---
+
+## La page
+
+**Filtre de page : `Métropole = t`.** Les DOM et collectivités sont écartés
+pour deux raisons. D'abord la cohérence : leurs centroïdes sortent des bornes
+de la carte métropolitaine. Ensuite la robustesse — Mayotte n'a que 11
+diagnostics et la Nouvelle-Calédonie 10, si bien que leurs taux respectifs de
+36 % et 20 % ne reposent que sur 4 et 2 logements. En métropole, le plus petit
+département est la Lozère avec 5 698 diagnostics.
+
+| Visuel | Ce qu'il montre |
+|---|---|
+| Deux cartes | 7 847 244 diagnostics, 681 719 passoires |
+| Carte Azure Maps | 96 départements, taille du cercle = taux de passoires |
+| Barres | Les 15 départements au taux le plus élevé |
+| Nuage de points | Part de maisons contre taux de passoires, taille = volume |
+
+### Pourquoi le grain départemental
+
+La première version cartographiait les communes. À 23 628 communes
+géolocalisées, chaque point occupe moins d'un pixel : les cercles se
+recouvrent, plus rien n'est identifiable ni cliquable. Aucun réglage
+d'affichage ne corrige cela — ni le rayon, ni l'opacité, ni le passage en
+carte thermique, tous essayés. C'est le grain qui était en cause.
+
+À 96 points, chaque bulle redevient lisible et porteuse de sens.
+
+### Sur le nuage de points
+
+Le titre annonce une corrélation faible, et c'est mesuré : **r = 0,31**, soit
+9 % de variance expliquée. La part de maisons compte, mais elle ne suffit pas
+à expliquer les écarts entre départements — le climat et la ruralité pèsent
+davantage. Le titre le dit plutôt que de laisser croire à un lien fort.
+
+À l'échelle du logement, en revanche, l'écart est net : 14,5 % de passoires
+pour les maisons contre 6,2 % pour les appartements. C'est l'agrégation
+départementale qui dilue l'effet.
+
+---
+
+## Reconstruire le modèle
+
+1. **Créer** → *Modèle sémantique* → *CSV*
+2. **Lien vers le fichier**, authentification *Anonyme*, URL :
+   `https://raw.githubusercontent.com/ebenezer-ngblogni/dpe-lakehouse/main/powerbi/data/mart_performance_departement.csv`
+3. **Délimiteur : Virgule.** Il n'est pas détecté automatiquement et tout
+   atterrit sinon dans une colonne unique.
+4. **Remplacer l'étape de typage** par une conversion explicite en locale
+   `en-US`. C'est indispensable : le CSV utilise le point comme séparateur
+   décimal, la locale française attend la virgule, et Power BI retombe alors
+   sur du texte pour toutes les colonnes décimales — y compris la latitude et
+   la longitude, ce qui vide la carte.
+
+```m
+Table.TransformColumnTypes(#"En-têtes promus",
+  {{"code_departement", type text}, ..., {"latitude", type number}}, "en-US")
+```
+
+   Le code département doit rester du **texte** : typé en nombre, « 01 »
+   perdrait son zéro initial. Le même piège existe côté dbt, où le seed
+   `ref_departement` déclare ses types explicitement.
+
+5. **Renommer les colonnes** en libellés lisibles via `Table.RenameColumns`.
+6. Dans le visuel carte, **latitude et longitude doivent être en « Ne pas
+   résumer »** — Power BI l'exige pour tracer des paires de coordonnées.
+
+---
+
+## Régénérer les données
 
 ```bash
-make powerbi-export
+make dbt-run
+python scripts/export_powerbi.py \
+  --table mart_performance_departement --table mart_profil_batiment \
+  --destination powerbi/data
+git add powerbi/data && git commit && git push
 ```
 
-Il produit, dans `data/exports/powerbi/` :
+Le rapport lit l'URL GitHub : **il faut pousser pour que l'actualisation voie
+les nouvelles données.**
 
-| Fichier | Contenu | Taille |
-|---|---|---|
-| `dim_commune.csv` | 34 679 communes | 1,6 Mo |
-| `mart_performance_commune.csv` | 97 763 agrégats commune × année | 11 Mo |
-| `fct_dpe.parquet` | 7,8 M de diagnostics | 266 Mo |
-
-La table de faits est en Parquet et non en CSV : le même contenu pèserait
-~2,5 Go en CSV et mettrait plusieurs minutes à s'importer. Power BI lit le
-Parquet nativement (*Obtenir les données → Fichier → Parquet*).
-
-Sous Windows, ces fichiers se trouvent sur la partition partagée, dans
-`dpelab\data\exports\powerbi\`.
-
-### Cas B — Tout tourne sur la même machine
-
-**Obtenir les données → Base de données PostgreSQL**
-
-| Champ | Valeur |
-|---|---|
-| Serveur | `localhost:5434` |
-| Base de données | `dpe` |
-| Mode | **Importer** |
-| Utilisateur | `powerbi_reader` |
-| Mot de passe | celui défini dans `scripts/init-warehouse.sql` |
-
-Deux points importants :
-
-- **Utiliser `powerbi_reader`, pas le compte propriétaire.** Ce rôle est en
-  lecture seule sur les schémas `marts` et `staging`. Un rapport n'a aucune
-  raison de pouvoir écrire dans l'entrepôt.
-- **Mode Import et non DirectQuery.** En Import, le rapport reste consultable
-  même quand la pile Docker est éteinte — indispensable pour une démonstration
-  en entretien ou un partage sur LinkedIn. DirectQuery afficherait des visuels
-  vides sans la base allumée. Dans le cas A, l'Import est de toute façon le
-  seul mode possible.
-
-Tables à charger : `marts.fct_dpe`, `marts.dim_commune`,
-`marts.mart_performance_commune`.
-
-> Sur un poste modeste, charger `mart_performance_commune` et `dim_commune`
-> suffit pour l'essentiel du rapport : `fct_dpe` et ses 15 M de lignes ne sont
-> nécessaires que pour les analyses au niveau du logement individuel.
+La reprojection Lambert 93 → WGS84 est faite par le script d'export, avec un
+garde-fou sur les bornes métropolitaines. Sur les 105 lignes exportées, 96
+ressortent géolocalisées : exactement les départements métropolitains.
 
 ---
 
-## 2. Modèle de données
+## Reste à faire
 
-Schéma en étoile, relations à créer dans la vue *Modèle* :
-
-```
-        dim_commune
-       (code_commune)
-              │  1
-              │
-              │  ∗
-          fct_dpe
-       (code_commune)
-
-  mart_performance_commune ── relié à dim_commune sur code_commune
-```
-
-- Cardinalité : **un-à-plusieurs**, `dim_commune` → `fct_dpe`
-- Sens de filtrage : **simple**, de la dimension vers les faits
-- Masquer `code_commune` côté `fct_dpe` pour éviter que l'utilisateur filtre sur
-  la mauvaise colonne
-
-### Conversion des coordonnées
-
-Les coordonnées sont en **Lambert 93** (EPSG:2154), Power BI attend du **WGS84**
-(latitude/longitude). La conversion se fait en Power Query, sur `dim_commune`.
-
-L'approximation ci-dessous est suffisante pour une carte à l'échelle communale
-(erreur de l'ordre de la centaine de mètres). Pour une précision métrique, il
-faudrait faire la reprojection en amont, dans le pipeline.
-
-```m
-// Colonne personnalisée : latitude approchée depuis Lambert 93
-let
-    x = [centroide_x_lambert93],
-    y = [centroide_y_lambert93]
-in
-    if x = null or y = null then null
-    else 46.5 + (y - 6600000) / 111320
-```
-
-```m
-// Colonne personnalisée : longitude approchée
-let
-    x = [centroide_x_lambert93],
-    y = [centroide_y_lambert93],
-    lat = 46.5 + (y - 6600000) / 111320
-in
-    if x = null or y = null then null
-    else 3.0 + (x - 700000) / (111320 * Number.Cos(lat * Number.PI / 180))
-```
-
-Marquer ensuite les colonnes en *Catégorie de données → Latitude / Longitude*.
-
----
-
-## 3. Mesures DAX
-
-À créer dans une table de mesures dédiée (`Ruban → Saisir des données`, table
-vide nommée `_Mesures`) : les regrouper évite qu'elles se dispersent dans les
-tables de faits.
-
-```dax
-Nombre de DPE = COUNTROWS(fct_dpe)
-```
-
-```dax
-Nombre de passoires =
-CALCULATE(
-    COUNTROWS(fct_dpe),
-    fct_dpe[est_passoire_thermique] = TRUE()
-)
-```
-
-```dax
--- DIVIDE plutôt que l'opérateur / : gère la division par zéro sans erreur
-Taux de passoires % =
-DIVIDE([Nombre de passoires], [Nombre de DPE], 0) * 100
-```
-
-```dax
-Consommation moyenne EP =
-AVERAGE(fct_dpe[conso_ep_kwh_m2_an])
-```
-
-```dax
--- La médiane résiste aux valeurs extrêmes que la moyenne subit
-Consommation médiane EP =
-MEDIAN(fct_dpe[conso_ep_kwh_m2_an])
-```
-
-```dax
-Coût énergétique moyen =
-AVERAGE(fct_dpe[cout_annuel_total_eur])
-```
-
-```dax
--- Évolution du taux de passoires par rapport à l'année précédente.
--- Sans table de dates dédiée, on décale sur la colonne d'année entière.
-Taux passoires N-1 =
-VAR AnneeCourante = SELECTEDVALUE(fct_dpe[annee_etablissement])
-RETURN
-    CALCULATE(
-        [Taux de passoires %],
-        fct_dpe[annee_etablissement] = AnneeCourante - 1
-    )
-```
-
-```dax
-Écart taux passoires =
-VAR Precedent = [Taux passoires N-1]
-RETURN IF(NOT ISBLANK(Precedent), [Taux de passoires %] - Precedent)
-```
-
----
-
-## 4. Pages du rapport
-
-### Page 1 — Vue nationale
-
-- **Cartes de synthèse** : nombre de DPE, taux de passoires, consommation
-  médiane, coût énergétique moyen
-- **Carte choroplèthe** par département, colorée sur `Taux de passoires %`
-- **Histogramme empilé** : répartition A→G par année d'établissement
-- **Segments** : année, type de bâtiment, tranche d'âge du bâti
-
-Utiliser la palette réglementaire du DPE (vert A → rouge G) plutôt que les
-couleurs par défaut : elle est immédiatement lisible par quiconque a déjà vu un
-diagnostic.
-
-### Page 2 — Analyse territoriale
-
-- **Tableau** commune par commune : nombre de DPE, taux de passoires,
-  consommation médiane, tri décroissant sur le taux
-- **Nuage de points** : consommation médiane × taille du parc, un point par
-  commune, taille selon `nb_dpe`
-- **Drill-through** vers le détail d'une commune
-
-### Page 3 — Déterminants de la performance
-
-- **Matrice** tranche d'âge du bâti × étiquette DPE
-- **Barres** : consommation moyenne par énergie de chauffage
-- **Barres** : consommation moyenne par qualité d'isolation de l'enveloppe
-
-C'est la page qui porte le message analytique : elle montre l'effet de la
-réglementation thermique de 1974 sur la performance du parc.
-
-### Page 4 — Qualité des données
-
-Souvent négligée, c'est pourtant celle qui distingue un projet sérieux.
-
-- Nombre de lignes rejetées par motif (depuis `silver.dpe_rejets`)
-- Part des DPE au géocodage non fiable
-- Complétude des colonnes clés
-
----
-
-## 5. À versionner
-
-```
-powerbi/
-├── README.md              ce guide
-├── modele.bim             modèle exporté (Tabular Editor), sans données
-└── captures/              copies d'écran pour le README et LinkedIn
-```
-
-Le `.pbix` est exclu par `.gitignore`. Pour partager le rapport lui-même,
-publier sur Power BI Service et référencer le lien, ou exporter en PDF.
+- `mart_profil_batiment` est exporté mais pas encore exploité. Il porte le
+  résultat le plus démonstratif du jeu de données — la part de passoires passe
+  de 17,5 % avant 1948 à 0,0 % après 2013, avec un décrochage net après la
+  réglementation thermique de 1974. Il lui faut son propre modèle sémantique,
+  chaque CSV en engendrant un.
+- Le taux national ne peut pas être affiché en indicateur tant que le modèle
+  reste en lecture seule.
