@@ -1,0 +1,1000 @@
+<title>DPE Lakehouse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap">
+
+<style>
+:root {
+  /* Échelle réglementaire du DPE — arrêté du 31 mars 2021. Constante d'un thème à l'autre :
+     c'est une norme, pas une décision graphique. */
+  --dpe-a: #008550;
+  --dpe-b: #57aa28;
+  --dpe-c: #c9d200;
+  --dpe-d: #ffe500;
+  --dpe-e: #fcb700;
+  --dpe-f: #ef8023;
+  --dpe-g: #e30613;
+
+  /* Neutres tirés vers le bleu ardoise : le gris pur sonnerait comme un défaut. */
+  --ground: #e9ecf0;
+  --surface: #ffffff;
+  --surface-2: #f2f4f7;
+  --ink: #12171d;
+  --ink-2: #4a5561;
+  --ink-3: #79838f;
+  --rule: #d3d9e0;
+  --rule-strong: #b9c2cc;
+
+  --shell: min(1180px, 92vw);
+  --step-0: 1rem;
+  --step-1: 1.2rem;
+  --step-2: 1.5rem;
+  --step-3: 2rem;
+  --step-5: clamp(2.6rem, 6.4vw, 5.2rem);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0b0e13;
+    --surface: #141920;
+    --surface-2: #1b212a;
+    --ink: #e7ecf2;
+    --ink-2: #a3aeba;
+    --ink-3: #6f7b88;
+    --rule: #262e39;
+    --rule-strong: #38424f;
+    --dpe-a: #14a869;
+    --dpe-b: #6fc23a;
+    --dpe-c: #d8e11a;
+    --dpe-d: #ffe93b;
+    --dpe-e: #ffc42b;
+    --dpe-f: #ff9440;
+    --dpe-g: #ff3b3f;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #0b0e13;
+  --surface: #141920;
+  --surface-2: #1b212a;
+  --ink: #e7ecf2;
+  --ink-2: #a3aeba;
+  --ink-3: #6f7b88;
+  --rule: #262e39;
+  --rule-strong: #38424f;
+  --dpe-a: #14a869;
+  --dpe-b: #6fc23a;
+  --dpe-c: #d8e11a;
+  --dpe-d: #ffe93b;
+  --dpe-e: #ffc42b;
+  --dpe-f: #ff9440;
+  --dpe-g: #ff3b3f;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size: var(--step-0);
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .display {
+  font-family: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -.022em;
+  text-wrap: balance;
+  margin: 0;
+  line-height: 1.05;
+}
+
+.mono {
+  font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+a { color: inherit; text-decoration-color: var(--rule-strong); text-underline-offset: .22em; }
+a:hover { text-decoration-color: currentColor; }
+:focus-visible { outline: 2px solid var(--dpe-a); outline-offset: 3px; border-radius: 2px; }
+
+/* ---------- ossature ---------- */
+
+.shell { width: var(--shell); margin-inline: auto; }
+
+.panel {
+  border-top: 1px solid var(--rule);
+  padding-block: clamp(3.4rem, 7vw, 6rem);
+}
+.panel:first-of-type { border-top: 0; }
+
+.eyebrow {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .715rem;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  margin-bottom: 1.5rem;
+}
+.eyebrow::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+.lede {
+  font-size: var(--step-1);
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+
+/* ---------- ouverture ---------- */
+
+.hero { padding-block: clamp(3rem, 7vw, 5.5rem) clamp(2.5rem, 5vw, 4rem); }
+
+.hero-kicker {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .74rem;
+  letter-spacing: .19em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 1.9rem;
+}
+.hero-kicker b { color: var(--dpe-a); font-weight: 700; }
+
+h1 {
+  font-size: var(--step-5);
+  max-width: 17ch;
+  margin-bottom: 1.6rem;
+}
+h1 em {
+  font-style: normal;
+  color: var(--dpe-g);
+}
+
+.hero-sub {
+  font-size: var(--step-1);
+  color: var(--ink-2);
+  max-width: 58ch;
+  margin-bottom: 3.2rem;
+}
+
+/* ---------- l'étiquette ---------- */
+
+.etiquette {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  margin-bottom: 2.6rem;
+}
+
+/* Longueur strictement proportionnelle à la part du parc, l'étiquette C
+   servant de référence à 100 %. La lettre vit dans une pastille de largeur
+   fixe : elle reste lisible même pour l'étiquette A, qui ne pèse que 1,8 %. */
+.bar-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 4.2rem auto;
+  align-items: center;
+  gap: .55rem .9rem;
+}
+
+.chevron {
+  width: clamp(3.1rem, 5vw, 3.8rem);
+  height: clamp(2.2rem, 3.6vw, 2.7rem);
+  background: var(--c);
+  clip-path: polygon(0 0, calc(100% - .62rem) 0, 100% 50%, calc(100% - .62rem) 100%, 0 100%);
+  display: grid;
+  place-items: center;
+  padding-right: .55rem;
+  color: #0b0e13;
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.15rem, 2.1vw, 1.5rem);
+  line-height: 1;
+}
+
+.bar-track {
+  height: clamp(.85rem, 1.5vw, 1.15rem);
+  background: var(--surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar-fill {
+  display: block;
+  height: 100%;
+  width: var(--w);
+  background: var(--c);
+  border-radius: 999px;
+  animation: grow .9s cubic-bezier(.22, .8, .3, 1) backwards;
+}
+@keyframes grow { from { width: 0; } }
+
+.bar-row .pct {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: .88rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.bar-row .cnt {
+  font-family: "JetBrains Mono", monospace;
+  font-size: .76rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 560px) { .bar-row .cnt { display: none; } }
+
+.sieve-bracket {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  margin-top: .9rem;
+  padding-left: .2rem;
+  font-size: .86rem;
+  color: var(--ink-2);
+}
+.sieve-bracket .tag {
+  font-family: "JetBrains Mono", monospace;
+  font-size: .7rem;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--dpe-g);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: .18rem .62rem;
+}
+
+/* ---------- compteurs ---------- */
+
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.stat {
+  background: var(--surface);
+  padding: 1.25rem 1.15rem;
+}
+.stat .n {
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-weight: 700;
+  font-size: var(--step-3);
+  line-height: 1;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  display: block;
+  margin-bottom: .42rem;
+}
+.stat .l {
+  font-size: .79rem;
+  color: var(--ink-3);
+  line-height: 1.35;
+  display: block;
+}
+
+/* ---------- la chaîne ---------- */
+
+.chain {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.1rem;
+  margin-top: 2.4rem;
+}
+.stage {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1.4rem 1.35rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: .62rem;
+  position: relative;
+}
+.stage::before {
+  content: attr(data-step);
+  position: absolute;
+  top: 1.35rem;
+  right: 1.25rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: .7rem;
+  color: var(--ink-3);
+  letter-spacing: .1em;
+}
+.stage h3 {
+  font-size: var(--step-1);
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+.stage p { margin: 0; font-size: .89rem; color: var(--ink-2); }
+.stage .vol {
+  font-family: "JetBrains Mono", monospace;
+  font-size: .82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  padding-top: .55rem;
+  border-top: 1px dashed var(--rule);
+  margin-top: auto;
+}
+.tools { display: flex; flex-wrap: wrap; gap: .35rem; }
+.tool {
+  font-family: "JetBrains Mono", monospace;
+  font-size: .705rem;
+  padding: .19rem .5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  color: var(--ink-2);
+}
+
+/* ---------- résultats ---------- */
+
+.finding { display: grid; gap: 2.2rem; }
+.finding + .finding { margin-top: clamp(3rem, 6vw, 4.6rem); }
+@media (min-width: 900px) {
+  .finding { grid-template-columns: minmax(0, 21rem) minmax(0, 1fr); gap: 3.2rem; align-items: start; }
+}
+.finding h3 {
+  font-size: var(--step-2);
+  margin-bottom: .85rem;
+}
+.finding p { margin: 0 0 .9rem; color: var(--ink-2); font-size: .95rem; }
+.finding p:last-child { margin-bottom: 0; }
+.finding strong { color: var(--ink); font-weight: 600; }
+
+/* histogramme des périodes de construction */
+.periods {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: clamp(.35rem, 1vw, .8rem);
+  align-items: end;
+  height: 17rem;
+  padding: 1.4rem 1.3rem .5rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+.period {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: .5rem;
+  justify-items: center;
+  height: 100%;
+}
+.period .col-area { width: 100%; display: flex; align-items: flex-end; }
+.period .col {
+  width: 100%;
+  background: var(--c);
+  border-radius: 2px 2px 0 0;
+  min-height: 3px;
+  animation: rise .9s cubic-bezier(.22, .8, .3, 1) backwards;
+}
+@keyframes rise { from { height: 0; opacity: .25; } }
+.period .v {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: .82rem;
+  font-variant-numeric: tabular-nums;
+}
+.period .k {
+  font-family: "JetBrains Mono", monospace;
+  font-size: .66rem;
+  color: var(--ink-3);
+  text-align: center;
+  line-height: 1.25;
+}
+.rt-marker {
+  position: absolute;
+  top: .9rem;
+  bottom: 2.4rem;
+  border-left: 1px dashed var(--dpe-g);
+  padding-left: .5rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: .66rem;
+  color: var(--dpe-g);
+  line-height: 1.3;
+  max-width: 8.5rem;
+  pointer-events: none;
+}
+
+/* écart géographique */
+.gap-viz {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1.5rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+.gap-row {
+  display: grid;
+  grid-template-columns: 8.6rem minmax(0, 1fr) 3.6rem;
+  align-items: center;
+  gap: .8rem;
+  font-size: .84rem;
+}
+.gap-row .dep { color: var(--ink-2); }
+.gap-row .track { height: .62rem; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.gap-row .fill { height: 100%; background: var(--c); border-radius: 999px; animation: grow2 .9s cubic-bezier(.22,.8,.3,1) backwards; }
+@keyframes grow2 { from { width: 0; } }
+.gap-row .val {
+  font-family: "JetBrains Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-weight: 700;
+  font-size: .82rem;
+}
+.gap-split {
+  border-top: 1px dashed var(--rule);
+  margin-block: .5rem;
+  padding-top: .75rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: .7rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* échelle de coût */
+.cost {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: .3rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1.4rem 1.3rem;
+}
+.cost-cell { display: flex; flex-direction: column; align-items: center; gap: .55rem; }
+.cost-cell .chip {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 2.9rem;
+  background: var(--c);
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+  font-family: "Bricolage Grotesque", sans-serif;
+  font-weight: 800;
+  color: #0b0e13;
+  font-size: 1.05rem;
+}
+.cost-cell .amt {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: .84rem;
+  font-variant-numeric: tabular-nums;
+}
+.cost-cell .unit { font-size: .64rem; color: var(--ink-3); }
+
+/* ---------- rigueur ---------- */
+
+.two-col { display: grid; gap: 1.1rem; }
+@media (min-width: 820px) { .two-col { grid-template-columns: 1fr 1fr; } }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1.5rem 1.45rem;
+}
+.card h3 { font-size: var(--step-1); margin-bottom: .8rem; }
+.card p { margin: 0 0 .8rem; font-size: .9rem; color: var(--ink-2); }
+.card p:last-child { margin-bottom: 0; }
+.card strong { color: var(--ink); font-weight: 600; }
+
+.ledger { display: flex; flex-direction: column; gap: .1rem; }
+.ledger-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1rem;
+  padding: .62rem 0;
+  border-bottom: 1px dashed var(--rule);
+  font-size: .88rem;
+  align-items: baseline;
+}
+.ledger-row:last-child { border-bottom: 0; }
+.ledger-row .k { color: var(--ink-2); }
+.ledger-row .v {
+  font-family: "JetBrains Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ok { color: var(--dpe-a); }
+.warn { color: var(--dpe-f); }
+
+.myth {
+  display: grid;
+  gap: .55rem;
+  padding: .95rem 0;
+  border-bottom: 1px dashed var(--rule);
+}
+.myth:last-child { border-bottom: 0; }
+.myth .claim { font-size: .89rem; color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+.myth .truth { font-size: .92rem; }
+.myth .truth b { color: var(--dpe-a); font-weight: 700; }
+
+/* ---------- limites ---------- */
+
+.caveat {
+  border-left: 2px solid var(--dpe-f);
+  padding: .2rem 0 .2rem 1.15rem;
+  margin-bottom: 1.35rem;
+}
+.caveat:last-child { margin-bottom: 0; }
+.caveat h3 { font-size: 1.02rem; font-weight: 700; margin-bottom: .35rem; letter-spacing: -.005em; }
+.caveat p { margin: 0; font-size: .9rem; color: var(--ink-2); }
+
+/* ---------- pied ---------- */
+
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 1.6rem 2rem;
+  margin-top: 2rem;
+}
+.stack-col h4 {
+  font-family: "JetBrains Mono", monospace;
+  font-size: .69rem;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 .7rem;
+  font-weight: 400;
+}
+.stack-col ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .3rem; }
+.stack-col li { font-size: .89rem; color: var(--ink-2); }
+.stack-col li b { color: var(--ink); font-weight: 600; }
+
+footer {
+  border-top: 1px solid var(--rule);
+  padding-block: 2.6rem 3.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: .86rem;
+  color: var(--ink-3);
+}
+footer .who { color: var(--ink); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<main>
+<div class="shell">
+
+  <!-- ══════════ ouverture ══════════ -->
+  <section class="hero">
+    <div class="hero-kicker">Pipeline de données · ADEME · <b>7 849 191 diagnostics</b></div>
+
+    <h1>Où sont les <em>passoires thermiques</em> françaises&nbsp;?</h1>
+
+    <p class="hero-sub">
+      Une chaîne complète, de l'API publique jusqu'au rapport&nbsp;: ingestion Python idempotente,
+      nettoyage Spark&nbsp;/&nbsp;Scala, modèle en étoile dbt, orchestration Airflow, restitution Power&nbsp;BI.
+      Les chiffres ci-dessous sortent de l'entrepôt, pas d'une brochure.
+    </p>
+
+    <!-- L'étiquette énergie, forme réglementaire, longueur = part réelle du parc diagnostiqué -->
+    <div class="etiquette" role="img" aria-label="Répartition du parc diagnostiqué par étiquette énergie : A 1,8 %, B 5,7 %, C 38,5 %, D 30,4 %, E 14,8 %, F 5,7 %, G 3,0 %">
+      <div class="bar-row">
+        <span class="chevron" style="--c: var(--dpe-a)">A</span>
+        <span class="bar-track"><span class="bar-fill" style="--c: var(--dpe-a); --w: 4.7%; animation-delay: 0.00s"></span></span>
+        <span class="pct">1,8 %</span>
+        <span class="cnt">144 997</span>
+      </div>
+      <div class="bar-row">
+        <span class="chevron" style="--c: var(--dpe-b)">B</span>
+        <span class="bar-track"><span class="bar-fill" style="--c: var(--dpe-b); --w: 14.8%; animation-delay: 0.07s"></span></span>
+        <span class="pct">5,7 %</span>
+        <span class="cnt">450 033</span>
+      </div>
+      <div class="bar-row">
+        <span class="chevron" style="--c: var(--dpe-c)">C</span>
+        <span class="bar-track"><span class="bar-fill" style="--c: var(--dpe-c); --w: 100.0%; animation-delay: 0.14s"></span></span>
+        <span class="pct">38,5 %</span>
+        <span class="cnt">3 024 084</span>
+      </div>
+      <div class="bar-row">
+        <span class="chevron" style="--c: var(--dpe-d)">D</span>
+        <span class="bar-track"><span class="bar-fill" style="--c: var(--dpe-d); --w: 79.0%; animation-delay: 0.21s"></span></span>
+        <span class="pct">30,4 %</span>
+        <span class="cnt">2 384 036</span>
+      </div>
+      <div class="bar-row">
+        <span class="chevron" style="--c: var(--dpe-e)">E</span>
+        <span class="bar-track"><span class="bar-fill" style="--c: var(--dpe-e); --w: 38.4%; animation-delay: 0.28s"></span></span>
+        <span class="pct">14,8 %</span>
+        <span class="cnt">1 164 262</span>
+      </div>
+      <div class="bar-row">
+        <span class="chevron" style="--c: var(--dpe-f)">F</span>
+        <span class="bar-track"><span class="bar-fill" style="--c: var(--dpe-f); --w: 14.8%; animation-delay: 0.35s"></span></span>
+        <span class="pct">5,7 %</span>
+        <span class="cnt">444 272</span>
+      </div>
+      <div class="bar-row">
+        <span class="chevron" style="--c: var(--dpe-g)">G</span>
+        <span class="bar-track"><span class="bar-fill" style="--c: var(--dpe-g); --w: 7.8%; animation-delay: 0.42s"></span></span>
+        <span class="pct">3,0 %</span>
+        <span class="cnt">237 507</span>
+      </div>
+    </div>
+
+    <div class="sieve-bracket">
+      <span class="tag">F + G</span>
+      <span><strong>681 719 passoires thermiques</strong>, soit 8,69 % du parc diagnostiqué. Deux logements sur trois sont en C ou D&nbsp;: ni catastrophe, ni exemplarité.</span>
+    </div>
+  </section>
+
+  <!-- ══════════ la chaîne ══════════ -->
+  <section class="panel">
+    <div class="eyebrow">La chaîne, bout à bout</div>
+    <p class="lede">
+      Six étapes orchestrées par Airflow, chacune reprenable sans effet de bord.
+      Les volumes sont ceux relevés en base, pas des estimations.
+    </p>
+
+    <div class="chain">
+      <article class="stage" data-step="01">
+        <h3>Ingestion</h3>
+        <p>Pagination par curseur sur l'API Data&nbsp;Fair, partitions mensuelles, promotion atomique et manifeste de complétude.</p>
+        <div class="tools"><span class="tool">Python</span><span class="tool">PyArrow</span><span class="tool">Parquet</span></div>
+        <div class="vol">15,3 M lignes depuis juillet 2021</div>
+      </article>
+
+      <article class="stage" data-step="02">
+        <h3>Nettoyage</h3>
+        <p>Déduplication par fenêtre, résolution des chaînes de remplacement, règles qualité dont chaque rejet garde son motif.</p>
+        <div class="tools"><span class="tool">Spark 3.5</span><span class="tool">Scala 2.12</span><span class="tool">sbt</span></div>
+        <div class="vol">720 483 rejets tracés</div>
+      </article>
+
+      <article class="stage" data-step="03">
+        <h3>Entrepôt</h3>
+        <p>Chargement JDBC par lots, 40 colonnes projetées sur 78, élagage de partitions sur la fenêtre utile.</p>
+        <div class="tools"><span class="tool">PostgreSQL 16</span><span class="tool">JDBC</span></div>
+        <div class="vol">7 849 191 lignes chargées</div>
+      </article>
+
+      <article class="stage" data-step="04">
+        <h3>Modélisation</h3>
+        <p>Schéma en étoile, agrégats commune et département, droits déclaratifs, référentiel versionné en seed.</p>
+        <div class="tools"><span class="tool">dbt 1.9</span><span class="tool">SQL</span><span class="tool">dbt_utils</span></div>
+        <div class="vol">34 679 communes · 104 départements</div>
+      </article>
+
+      <article class="stage" data-step="05">
+        <h3>Orchestration</h3>
+        <p>DAG à six tâches, fenêtre glissante de trois mois, exécution Spark déportée dans un conteneur dédié.</p>
+        <div class="tools"><span class="tool">Airflow 2.10</span><span class="tool">Docker</span><span class="tool">MinIO</span></div>
+        <div class="vol">6 tâches, code retour 0</div>
+      </article>
+
+      <article class="stage" data-step="06">
+        <h3>Restitution</h3>
+        <p>Taux pré-calculés en SQL faute de mesures DAX, grain aligné sur le visuel, carte à 96 points lisibles.</p>
+        <div class="tools"><span class="tool">Power BI</span><span class="tool">Power Query M</span></div>
+        <div class="vol">96 départements cartographiés</div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ══════════ résultats ══════════ -->
+  <section class="panel">
+    <div class="eyebrow">Ce que les données disent</div>
+
+    <!-- 1. la rupture de 1974 -->
+    <div class="finding">
+      <div>
+        <h3>Le choc pétrolier se lit dans le bâti</h3>
+        <p>
+          La part de passoires s'effondre après <strong>1974</strong>, année de la première
+          réglementation thermique. Avant 1948, près d'un logement sur cinq est classé F ou G.
+          Après 2013, il n'y en a plus aucun&nbsp;: <strong>0,0 %</strong>.
+        </p>
+        <p>
+          L'effet joue aussi dans l'autre sens. Parmi les maisons construites depuis 2013,
+          <strong>60,3 % décrochent une étiquette A ou B</strong>.
+        </p>
+        <p>
+          C'est l'effet d'une politique publique, mesuré sur des données de terrain
+          et non sur une modélisation.
+        </p>
+      </div>
+      <div class="periods" role="img" aria-label="Part de passoires par période de construction : avant 1948, 17,5 % ; 1948-1974, 9,4 % ; 1975-1988, 2,6 % ; 1989-2000, 0,5 % ; 2001-2012, 0,1 % ; 2013 et après, 0,0 %">
+        <div class="rt-marker" style="left: 34%">RT 1974<br>1<sup>re</sup> réglementation thermique</div>
+        <div class="period">
+          <span class="v">17,5 %</span>
+          <div class="col-area"><div class="col" style="--c: var(--dpe-g); height: 88%; animation-delay: .05s"></div></div>
+          <span class="k">avant<br>1948</span>
+        </div>
+        <div class="period">
+          <span class="v">9,4 %</span>
+          <div class="col-area"><div class="col" style="--c: var(--dpe-f); height: 47%; animation-delay: .12s"></div></div>
+          <span class="k">1948<br>1974</span>
+        </div>
+        <div class="period">
+          <span class="v">2,6 %</span>
+          <div class="col-area"><div class="col" style="--c: var(--dpe-e); height: 13%; animation-delay: .19s"></div></div>
+          <span class="k">1975<br>1988</span>
+        </div>
+        <div class="period">
+          <span class="v">0,5 %</span>
+          <div class="col-area"><div class="col" style="--c: var(--dpe-c); height: 3%; animation-delay: .26s"></div></div>
+          <span class="k">1989<br>2000</span>
+        </div>
+        <div class="period">
+          <span class="v">0,1 %</span>
+          <div class="col-area"><div class="col" style="--c: var(--dpe-b); height: 1.5%; animation-delay: .33s"></div></div>
+          <span class="k">2001<br>2012</span>
+        </div>
+        <div class="period">
+          <span class="v">0,0 %</span>
+          <div class="col-area"><div class="col" style="--c: var(--dpe-a); height: 1%; animation-delay: .4s"></div></div>
+          <span class="k">2013<br>et après</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. la géographie -->
+    <div class="finding">
+      <div>
+        <h3>Un facteur 17 entre deux départements</h3>
+        <p>
+          La Creuse compte <strong>34,6 %</strong> de passoires, l'Hérault <strong>2,1 %</strong>.
+          Montagne et diagonale rurale d'un côté, arc méditerranéen de l'autre&nbsp;:
+          le besoin de chauffage explique l'essentiel.
+        </p>
+        <p>
+          <strong>Paris fait exception.</strong> Seul département urbain dense du peloton de tête
+          à 15,7 %, il ne doit rien au climat mais au bâti haussmannien, aux petites surfaces
+          et au chauffage électrique en étage.
+        </p>
+        <p>
+          Les départements d'outre-mer sont écartés du classement&nbsp;: Mayotte n'a que
+          11 diagnostics, la Nouvelle-Calédonie 10. Leurs taux ne reposent sur rien.
+        </p>
+      </div>
+      <div class="gap-viz" role="img" aria-label="Taux de passoires par département, des plus élevés aux plus faibles : Creuse 34,6 %, Hautes-Alpes 24,1 %, Cantal 23,9 %, Lozère 22,8 %, Paris 15,7 %, Var 3,0 %, Aude 2,6 %, Bouches-du-Rhône 2,6 %, Hérault 2,1 %">
+        <div class="gap-row"><span class="dep">Creuse</span><span class="track"><span class="fill" style="--c: var(--dpe-g); width: 100%; animation-delay: .05s"></span></span><span class="val">34,6 %</span></div>
+        <div class="gap-row"><span class="dep">Hautes-Alpes</span><span class="track"><span class="fill" style="--c: var(--dpe-g); width: 70%; animation-delay: .1s"></span></span><span class="val">24,1 %</span></div>
+        <div class="gap-row"><span class="dep">Cantal</span><span class="track"><span class="fill" style="--c: var(--dpe-f); width: 69%; animation-delay: .15s"></span></span><span class="val">23,9 %</span></div>
+        <div class="gap-row"><span class="dep">Lozère</span><span class="track"><span class="fill" style="--c: var(--dpe-f); width: 66%; animation-delay: .2s"></span></span><span class="val">22,8 %</span></div>
+        <div class="gap-row"><span class="dep">Paris</span><span class="track"><span class="fill" style="--c: var(--dpe-e); width: 45%; animation-delay: .25s"></span></span><span class="val">15,7 %</span></div>
+
+        <div class="gap-split">Moyenne métropolitaine · 8,69 %</div>
+
+        <div class="gap-row"><span class="dep">Var</span><span class="track"><span class="fill" style="--c: var(--dpe-b); width: 9%; animation-delay: .3s"></span></span><span class="val">3,0 %</span></div>
+        <div class="gap-row"><span class="dep">Aude</span><span class="track"><span class="fill" style="--c: var(--dpe-b); width: 8%; animation-delay: .35s"></span></span><span class="val">2,6 %</span></div>
+        <div class="gap-row"><span class="dep">Bouches-du-Rhône</span><span class="track"><span class="fill" style="--c: var(--dpe-a); width: 7%; animation-delay: .4s"></span></span><span class="val">2,6 %</span></div>
+        <div class="gap-row"><span class="dep">Hérault</span><span class="track"><span class="fill" style="--c: var(--dpe-a); width: 6%; animation-delay: .45s"></span></span><span class="val">2,1 %</span></div>
+      </div>
+    </div>
+
+    <!-- 3. le coût -->
+    <div class="finding">
+      <div>
+        <h3>Huit fois plus cher au mètre carré</h3>
+        <p>
+          Un logement classé G coûte <strong>50 € par m² et par an</strong> à chauffer,
+          un logement classé A <strong>6 €</strong>. Pour 70 m², l'écart annuel
+          dépasse <strong>3 000 €</strong>.
+        </p>
+        <p>
+          Le coût au m² neutralise l'effet de taille&nbsp;: sans lui, un département de grandes
+          maisons paraîtrait toujours plus cher qu'un département de petits appartements,
+          à performance égale.
+        </p>
+      </div>
+      <div class="cost" role="img" aria-label="Coût annuel de chauffage au mètre carré par étiquette : A 6 €, B 10 €, C 14 €, D 21 €, E 28 €, F 37 €, G 50 €">
+        <div class="cost-cell"><span class="chip" style="--c: var(--dpe-a)">A</span><span class="amt">6 €</span><span class="unit">/m²/an</span></div>
+        <div class="cost-cell"><span class="chip" style="--c: var(--dpe-b)">B</span><span class="amt">10 €</span><span class="unit">/m²/an</span></div>
+        <div class="cost-cell"><span class="chip" style="--c: var(--dpe-c)">C</span><span class="amt">14 €</span><span class="unit">/m²/an</span></div>
+        <div class="cost-cell"><span class="chip" style="--c: var(--dpe-d)">D</span><span class="amt">21 €</span><span class="unit">/m²/an</span></div>
+        <div class="cost-cell"><span class="chip" style="--c: var(--dpe-e)">E</span><span class="amt">28 €</span><span class="unit">/m²/an</span></div>
+        <div class="cost-cell"><span class="chip" style="--c: var(--dpe-f)">F</span><span class="amt">37 €</span><span class="unit">/m²/an</span></div>
+        <div class="cost-cell"><span class="chip" style="--c: var(--dpe-g)">G</span><span class="amt">50 €</span><span class="unit">/m²/an</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ rigueur ══════════ -->
+  <section class="panel">
+    <div class="eyebrow">Ce qui tient le pipeline debout</div>
+
+    <div class="two-col">
+      <div class="card">
+        <h3>74 tests automatisés</h3>
+        <div class="ledger">
+          <div class="ledger-row"><span class="k">Transformations Spark / Scala</span><span class="v ok">15 ✓</span></div>
+          <div class="ledger-row"><span class="k">Ingestion Python</span><span class="v ok">15 ✓</span></div>
+          <div class="ledger-row"><span class="k">Contrats de données dbt</span><span class="v ok">42 ✓</span></div>
+          <div class="ledger-row"><span class="k">Unicité <span class="mono">numero_dpe</span> en silver</span><span class="v warn">2 ✗</span></div>
+        </div>
+        <p style="margin-top: 1rem">
+          Les deux échecs sont laissés en rouge. Ils signalent un vrai doublon dans la source
+          — un diagnostic publié deux fois par l'ADEME, une version incomplète puis une
+          version complète. <strong>Un test rouge qui dit vrai vaut mieux qu'un test vert
+          qu'on a assoupli.</strong>
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>Trois hypothèses démenties par la mesure</h3>
+        <div class="myth">
+          <div class="claim">La déduplication va supprimer des milliers de doublons.</div>
+          <div class="truth"><b>0 ligne supprimée.</b> Le numéro de DPE est réellement unique dans le lot ingéré.</div>
+        </div>
+        <div class="myth">
+          <div class="claim">8,9 % des diagnostics ont été remplacés par un plus récent.</div>
+          <div class="truth"><b>1 499, soit 0,01 %.</b> Les prédécesseurs vivent dans un autre jeu de données de l'ADEME.</div>
+        </div>
+        <div class="myth">
+          <div class="claim">Un score de géocodage inférieur à 0,8 signale une adresse douteuse.</div>
+          <div class="truth"><b>79 % des lignes marquées.</b> Le seuil était arbitraire ; le statut de géocodage l'a remplacé.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col" style="margin-top: 1.1rem">
+      <div class="card">
+        <h3>Une décision prise après mesure</h3>
+        <p>
+          Le transport CSV a été retenu contre le JSON parce qu'il divise
+          <strong>par 2,8</strong> le temps de chargement, mesuré et non supposé.
+        </p>
+        <p>
+          Il a fallu en payer le prix&nbsp;: l'export CSV de l'API corrompt certains noms de
+          colonnes en remplaçant un underscore par une espace. Trois tests de non-régression
+          verrouillent la correction.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Un défaut de source retrouvé à la racine</h3>
+        <p>
+          Le code département manquait pour <strong>2 695 diagnostics</strong>. Deux causes&nbsp;:
+          un code postal mis à la place du code INSEE, et un préfixe <span class="mono">old</span>
+          apposé sur les communes fusionnées — <span class="mono">old05061</span> est l'ancien code de Gap.
+        </p>
+        <p>
+          La dérivation de secours a été validée avant d'être appliquée&nbsp;: sur les 34 594 communes
+          où la source fournit un code, elle retombe sur la même valeur dans <strong>100 % des cas</strong>.
+          Il reste une seule ligne irrécupérable.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ limites ══════════ -->
+  <section class="panel">
+    <div class="eyebrow">Ce que ces chiffres ne disent pas</div>
+    <p class="lede" style="margin-bottom: 2rem">
+      Un tableau de bord qui ne borne pas sa propre portée invite à surinterpréter.
+      Voici les deux limites à garder en tête.
+    </p>
+
+    <div class="two-col">
+      <div>
+        <div class="caveat">
+          <h3>Biais de sélection</h3>
+          <p>
+            Un DPE se réalise à la vente ou à la location. Ces 7,8 millions de lignes décrivent
+            le parc <em>qui change de mains</em>, pas le parc français. Les logements occupés
+            durablement par leurs propriétaires sont sous-représentés — et ce sont souvent
+            les plus anciens.
+          </p>
+        </div>
+        <div class="caveat">
+          <h3>Fenêtre temporelle</h3>
+          <p>
+            L'entrepôt ne contient que 2024 et après. Le lac, lui, couvre 15,3 millions de
+            diagnostics depuis juillet 2021. L'écart est un choix de coût de stockage,
+            pas un oubli.
+          </p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Un lien mesuré, pas supposé</h3>
+        <p>
+          À l'échelle du logement, le type de bâtiment pèse lourd&nbsp;:
+          <strong>14,5 %</strong> de passoires pour les maisons contre <strong>6,2 %</strong>
+          pour les appartements.
+        </p>
+        <p>
+          À l'échelle départementale, le même lien s'effondre&nbsp;: <strong>r = 0,31</strong>,
+          soit 9 % de variance expliquée. L'agrégation dilue l'effet, et le climat reprend
+          le dessus.
+        </p>
+        <p>
+          Le titre du visuel correspondant le dit ainsi, plutôt que de laisser croire
+          à une corrélation forte.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ stack ══════════ -->
+  <section class="panel">
+    <div class="eyebrow">Stack technique</div>
+    <div class="stack-grid">
+      <div class="stack-col">
+        <h4>Ingestion</h4>
+        <ul>
+          <li><b>Python 3.11</b></li>
+          <li>PyArrow · Parquet</li>
+          <li>API Data Fair (ADEME)</li>
+          <li>pytest · ruff</li>
+        </ul>
+      </div>
+      <div class="stack-col">
+        <h4>Traitement</h4>
+        <ul>
+          <li><b>Apache Spark 3.5.3</b></li>
+          <li><b>Scala 2.12</b> · sbt</li>
+          <li>sbt-assembly</li>
+          <li>ScalaTest</li>
+        </ul>
+      </div>
+      <div class="stack-col">
+        <h4>Entrepôt</h4>
+        <ul>
+          <li><b>PostgreSQL 16</b></li>
+          <li><b>dbt-core 1.9</b></li>
+          <li>Schéma en étoile</li>
+          <li>dbt_utils</li>
+        </ul>
+      </div>
+      <div class="stack-col">
+        <h4>Plateforme</h4>
+        <ul>
+          <li><b>Apache Airflow 2.10</b></li>
+          <li>Docker Compose</li>
+          <li>MinIO (S3)</li>
+          <li>GitHub Actions</li>
+        </ul>
+      </div>
+      <div class="stack-col">
+        <h4>Restitution</h4>
+        <ul>
+          <li><b>Power BI Service</b></li>
+          <li>Power Query M</li>
+          <li>Azure Maps</li>
+          <li>pyproj · Lambert 93</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div>
+      <span class="who">Eben Ezer NGBLOGNI</span> · Élève ingénieur informatique, EILCO<br>
+      Recherche une alternance data · 24 mois · septembre 2026
+    </div>
+    <div class="mono" style="font-size: .78rem">
+      Source&nbsp;: ADEME, base des DPE logements existants<br>
+      Code&nbsp;: <a href="https://github.com/ebenezer-ngblogni/dpe-lakehouse">github.com/ebenezer-ngblogni/dpe-lakehouse</a>
+    </div>
+  </footer>
+
+</div>
+</main>
