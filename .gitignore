@@ -38,3 +38,7 @@ tools/
 
 # Sorties et fichiers de travail de Playwright MCP
 .playwright-mcp/
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc

@@ -1,0 +1,836 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[left=2.2cm,right=2.2cm,top=2.4cm,bottom=2.2cm]{geometry}
+\usepackage[default,scale=0.96]{sourcesanspro}
+\usepackage[varqu,varl]{inconsolata}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+
+\tcbuselibrary{skins,breakable}
+
+% ---------------------------------------------------------------- %
+% Palette : l'échelle réglementaire du DPE, la même que les visuels
+% ---------------------------------------------------------------- %
+\definecolor{encre}{HTML}{11161C}
+\definecolor{encre2}{HTML}{49555F}
+\definecolor{encre3}{HTML}{79838F}
+\definecolor{trait}{HTML}{D6DAE1}
+\definecolor{fondcode}{HTML}{F5F7F9}
+\definecolor{vertA}{HTML}{008550}
+\definecolor{orangeF}{HTML}{EF8023}
+\definecolor{rougeG}{HTML}{C41520}
+\definecolor{bleu}{HTML}{1B5E8C}
+
+\hypersetup{
+  colorlinks=true, urlcolor=bleu, linkcolor=encre, citecolor=bleu,
+  pdftitle={DPE Lakehouse - Tutoriel d'exploitation},
+  pdfauthor={Eben Ezer NGBLOGNI}
+}
+
+\titleformat{\section}{\Large\bfseries\color{encre}}{\thesection.}{0.5em}{}[\vspace{-0.6em}\color{trait}\rule{\textwidth}{0.8pt}]
+\titleformat{\subsection}{\large\bfseries\color{encre}}{\thesubsection}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{encre2}}{}{0em}{}
+\titlespacing{\section}{0pt}{1.6em}{0.8em}
+\titlespacing{\subsection}{0pt}{1.2em}{0.4em}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{encre3}DPE Lakehouse}
+\fancyhead[R]{\small\color{encre3}\leftmark}
+\fancyfoot[C]{\small\color{encre3}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\color{trait}\hrule width\headwidth height\headrulewidth}
+
+\setlist[itemize]{leftmargin=1.2em,itemsep=0.25em,topsep=0.35em}
+\setlist[enumerate]{leftmargin=1.5em,itemsep=0.3em,topsep=0.35em}
+
+% ---------------------------------------------------------------- %
+% Blocs de code
+% ---------------------------------------------------------------- %
+\lstdefinestyle{base}{
+  backgroundcolor=\color{fondcode},
+  basicstyle=\ttfamily\footnotesize\color{encre},
+  keywordstyle=\color{bleu}\bfseries,
+  commentstyle=\color{encre3}\itshape,
+  stringstyle=\color{vertA},
+  numberstyle=\tiny\color{encre3},
+  frame=leftline, framerule=2pt, rulecolor=\color{trait},
+  framesep=8pt, xleftmargin=12pt,
+  breaklines=true, breakatwhitespace=false,
+  showstringspaces=false, tabsize=2,
+  columns=fullflexible, keepspaces=true,
+  literate=
+    {é}{{\'e}}1 {è}{{\`e}}1 {ê}{{\^e}}1 {à}{{\`a}}1 {ç}{{\c c}}1
+    {É}{{\'E}}1 {ô}{{\^o}}1 {î}{{\^\i}}1 {û}{{\^u}}1 {ù}{{\`u}}1
+    {²}{{\textsuperscript{2}}}1 {€}{{\euro}}1 {—}{{---}}1 {·}{{\textperiodcentered}}1
+}
+\lstdefinestyle{sh}{style=base,language=bash,
+  keywords={make,docker,python,cd,export,git,psql,dbt,curl,sbt},
+  morekeywords={compose,up,down,run,exec,ps}}
+\lstdefinestyle{py}{style=base,language=Python}
+\lstdefinestyle{sc}{style=base,language=Scala}
+\lstdefinestyle{sql}{style=base,language=SQL,morekeywords={with,as,filter,over,partition,round,nullif,coalesce}}
+\lstdefinestyle{yml}{style=base,language=Python,keywords={}}
+
+\newtcolorbox{pourquoi}[1][]{
+  enhanced, breakable, colback=white, colframe=vertA,
+  boxrule=0pt, leftrule=2.5pt, arc=0pt, outer arc=0pt,
+  left=10pt, right=8pt, top=7pt, bottom=7pt, #1}
+
+\newtcolorbox{attention}[1][]{
+  enhanced, breakable, colback=white, colframe=orangeF,
+  boxrule=0pt, leftrule=2.5pt, arc=0pt, outer arc=0pt,
+  left=10pt, right=8pt, top=7pt, bottom=7pt, #1}
+
+\newcommand{\cmd}[1]{\texttt{\small #1}}
+\newcommand{\titrebloc}[1]{\textbf{\color{encre}#1}\par\vspace{0.25em}}
+
+\begin{document}
+
+% ================================================================== %
+\begin{titlepage}
+\thispagestyle{empty}
+\vspace*{2.5cm}
+{\color{encre3}\small\ttfamily PIPELINE DE DONNÉES · ADEME · 2026}\\[1.2em]
+{\Huge\bfseries\color{encre} DPE Lakehouse}\\[0.5em]
+{\LARGE\color{encre2} Tutoriel d'exploitation}\\[2em]
+{\large\color{encre2} Comment lancer chaque composant, pourquoi il est là,\\ et ce qu'il faut savoir en dire.}\\[3em]
+
+\color{trait}\rule{\textwidth}{0.8pt}\\[1em]
+\color{encre2}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\textbf{Source} & ADEME, base des DPE logements existants \\[0.3em]
+\textbf{Volumes} & 15,3 M de lignes ingérées, 7 849 191 en entrepôt \\[0.3em]
+\textbf{Stack} & Python, Spark/Scala, PostgreSQL, dbt, Airflow, Docker, Power BI \\[0.3em]
+\textbf{Dépôt} & \href{https://github.com/ebenezer-ngblogni/dpe-lakehouse}{github.com/ebenezer-ngblogni/dpe-lakehouse} \\
+\end{tabularx}\\[1em]
+\color{trait}\rule{\textwidth}{0.8pt}
+
+\vfill
+{\color{encre}\large\bfseries Eben Ezer NGBLOGNI}\\
+{\color{encre3} Élève ingénieur informatique, EILCO}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ================================================================== %
+\section{Pourquoi ce projet}
+
+\subsection{Le problème choisi}
+
+La France compte environ 5,8 millions de logements classés F ou G, les
+\textbf{passoires thermiques}. La loi Climat et Résilience les interdit
+progressivement à la location. Savoir \emph{où} elles se trouvent et
+\emph{à quoi} elles ressemblent est une question publique, et l'ADEME publie
+la matière première en accès libre.
+
+\begin{pourquoi}
+\titrebloc{Ce que je réponds si on me demande « pourquoi ce sujet ? »}
+Trois raisons, dans cet ordre :
+
+\begin{enumerate}
+  \item \textbf{Le volume est réel.} 15,3 millions de lignes obligent à traiter
+        en distribué. Sur 50 000 lignes, Spark serait une pose ; ici il est
+        nécessaire.
+  \item \textbf{La donnée est sale, et de façon intéressante.} Codes postaux
+        à la place des codes INSEE, communes fusionnées préfixées
+        \cmd{old}, noms de colonnes corrompus par l'export CSV. Ce sont des
+        problèmes qu'on ne rencontre pas dans un jeu de données pédagogique.
+  \item \textbf{Le résultat se raconte.} La part de passoires s'effondre après
+        la réglementation thermique de 1974. C'est un fait mesuré sur des
+        données de terrain, pas une illustration.
+\end{enumerate}
+\end{pourquoi}
+
+\subsection{Ce que le projet démontre}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Compétence} & \textbf{Où elle se voit} \\
+\midrule
+Ingestion résiliente & Pagination par curseur, partitions mensuelles, reprise sans doublon \\
+Traitement distribué & Spark 3.5 en Scala, fenêtres, jointures, 15,3 M de lignes \\
+Qualité de données & 720 483 rejets tracés avec leur motif, jamais silencieux \\
+Modélisation & Schéma en étoile dbt, agrégats commune et département \\
+Orchestration & DAG Airflow à six tâches, chacune reprenable \\
+Restitution & Rapport Power BI, carte de France à 96 points lisibles \\
+Rigueur & 74 tests automatisés, intégration continue GitHub Actions \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{L'architecture en une phrase}
+
+Une \textbf{architecture médaillon} : la donnée brute atterrit en
+\emph{bronze} sans transformation, est nettoyée en \emph{silver}, puis
+modélisée en \emph{gold} (les marts) pour la restitution.
+
+\begin{pourquoi}
+\titrebloc{Pourquoi trois couches et pas une seule}
+Parce que chaque couche répond à une question différente.
+
+\textbf{Bronze} répond à « qu'a dit la source, exactement ? ». On n'y touche
+à rien : si une règle métier change, on rejoue depuis le bronze sans
+retélécharger 15 millions de lignes — l'API met environ cinq heures.
+
+\textbf{Silver} répond à « quelles lignes sont exploitables ? ». C'est là que
+vivent la déduplication et les règles qualité.
+
+\textbf{Gold} répond à « que veut voir l'analyste ? ». Les agrégats y sont
+pré-calculés pour que Power BI réponde instantanément.
+\end{pourquoi}
+
+\newpage
+% ================================================================== %
+\section{Démarrer la pile}
+
+\subsection{Prérequis}
+
+\begin{lstlisting}[style=sh]
+# Depuis la racine du dépôt
+cd ~/Bureau/lab/DataEng
+
+# Le lac vit sur une partition séparée (1 To). Si `data` est un lien mort :
+udisksctl mount -b /dev/sda5
+ls data/          # doit lister bronze/ silver/ exports/
+
+# Environnement Python
+make setup        # crée .venv et installe les dépendances
+\end{lstlisting}
+
+\begin{attention}
+\titrebloc{Le piège des identifiants Docker}
+Les conteneurs écrivent dans des volumes montés depuis l'hôte. Si l'UID du
+conteneur ne correspond pas au vôtre, l'écriture échoue avec un
+\cmd{Permission denied} peu bavard. Il faut donc exporter ces variables
+\emph{avant} de lancer la pile :
+
+\begin{lstlisting}[style=sh]
+export AIRFLOW_UID=$(id -u)
+export HOST_UID=$(id -u)
+export DOCKER_GID=$(getent group docker | cut -d: -f3)
+\end{lstlisting}
+
+\cmd{DOCKER\_GID} est nécessaire parce qu'Airflow soumet les jobs Spark via
+\cmd{docker exec} : il lui faut le droit de parler au démon Docker.
+\end{attention}
+
+\subsection{Lancer les services}
+
+\begin{lstlisting}[style=sh]
+make up           # équivalent de : docker compose up -d
+docker compose ps # vérifier que tout est "healthy"
+\end{lstlisting}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}llX@{}}
+\toprule
+\textbf{Service} & \textbf{Adresse} & \textbf{Rôle} \\
+\midrule
+Airflow    & \url{http://localhost:8080} & Orchestration (admin / admin) \\
+MinIO      & \url{http://localhost:9003} & Stockage objet compatible S3 \\
+PostgreSQL & \cmd{localhost:5434}        & Entrepôt analytique \\
+dbt docs   & \url{http://localhost:8081} & Documentation et lignage \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{attention}
+\titrebloc{Pourquoi ces ports décalés}
+5434 et non 5432, 9002/9003 et non 9000/9001 : les ports par défaut étaient
+déjà pris par un PostgreSQL local et un autre projet. Le décalage est
+volontaire et propagé partout — \cmd{docker-compose.yml},
+\cmd{profiles.yml}, le \cmd{Makefile}, le code Scala. C'est typiquement le
+genre de détail qu'un recruteur apprécie de vous entendre expliquer.
+\end{attention}
+
+\newpage
+% ================================================================== %
+\section{Étape 1 — Ingestion (Python)}
+
+\subsection{Lancer}
+
+\begin{lstlisting}[style=sh]
+make ingest-sample   # un seul mois, environ 2 minutes — pour tester
+make ingest-full     # tout l'historique depuis juillet 2021, environ 5 h
+make ingest-status   # compare l'état local à la source, partition par partition
+\end{lstlisting}
+
+\subsection{Pourquoi Python ici, et pas Spark}
+
+\begin{pourquoi}
+L'ingestion est un travail \textbf{d'entrées-sorties réseau}, pas de calcul.
+On attend l'API, on écrit sur disque, on recommence. Spark n'apporterait rien :
+son intérêt est de paralléliser du calcul sur des données déjà présentes.
+Python avec PyArrow suffit et se déploie en trois lignes.
+\end{pourquoi}
+
+\subsection{Les deux idées à retenir}
+
+\subsubsection{Pagination par curseur}
+
+L'API ADEME (Data Fair) plafonne à 10 000 lignes par requête et fournit le
+lien suivant dans un en-tête HTTP \cmd{Link}. On ne calcule donc jamais
+d'\emph{offset} soi-même : on suit le curseur.
+
+\begin{lstlisting}[style=py]
+# Le lien `next` embarque déjà tous les paramètres de la requête.
+next_link = response.links.get("next")
+url = next_link.get("url") if next_link else None
+\end{lstlisting}
+
+\begin{pourquoi}
+\titrebloc{Pourquoi c'est mieux qu'un offset}
+Avec \cmd{OFFSET n}, si une ligne est insérée en cours de parcours, tout
+décale et on saute ou duplique des enregistrements. Le curseur est stable :
+il pointe une position logique dans le jeu, pas un rang.
+\end{pourquoi}
+
+\subsubsection{Promotion atomique}
+
+Chaque mois est écrit dans un répertoire de \emph{staging}, puis promu d'un
+seul coup, accompagné d'un manifeste :
+
+\begin{lstlisting}[style=py]
+def is_partition_complete(self, table, year, month) -> bool:
+    """Une partition est réputée chargée si son manifeste est présent
+    ET complet."""
+    manifest = self.read_manifest(table, year, month)
+    return manifest is not None and manifest.is_complete
+\end{lstlisting}
+
+\begin{pourquoi}
+\titrebloc{Le problème que ça résout}
+Si le processus meurt à 80 \% d'un mois, une écriture directe laisserait une
+partition à moitié remplie — indiscernable d'une partition complète. À la
+reprise, le pipeline la croirait faite et perdrait 20 \% des données,
+silencieusement.
+
+Avec la promotion atomique, une partition incomplète n'a pas de manifeste :
+elle est simplement rejouée. \textbf{C'est ce qui rend l'ingestion
+idempotente} : la relancer dix fois donne le même résultat qu'une fois.
+\end{pourquoi}
+
+\subsubsection{Le choix du format de transport}
+
+\begin{pourquoi}
+\titrebloc{Une décision prise après mesure, pas par principe}
+L'API sert du JSON ou du CSV. J'ai mesuré les deux : le CSV divise
+\textbf{par 2,8} le temps de chargement, parce qu'il évite de construire un
+objet Python par ligne.
+
+Le prix à payer : l'export CSV de l'API corrompt certains noms de colonnes en
+remplaçant un underscore par une espace — le schéma déclare
+\cmd{conso\_5\_usages\_par\_m2\_ef}, le CSV émet
+\cmd{conso\_5 usages\_par\_m2\_ef}. On répare à la lecture, et trois tests de
+non-régression verrouillent la correction.
+\end{pourquoi}
+
+\newpage
+% ================================================================== %
+\section{Étape 2 — Nettoyage (Spark / Scala)}
+
+\subsection{Lancer}
+
+\begin{lstlisting}[style=sh]
+make build        # compile le jar avec sbt-assembly
+make test-scala   # 15 tests unitaires
+make silver       # bronze -> silver, sur la totalité du lac
+\end{lstlisting}
+
+\subsection{Pourquoi Scala et pas PySpark}
+
+\begin{pourquoi}
+Trois arguments, du plus fort au plus faible :
+
+\begin{enumerate}
+  \item \textbf{Scala est la langue native de Spark.} Le moteur est écrit en
+        Scala ; on parle directement à l'API, sans passerelle Py4J.
+  \item \textbf{Le typage attrape les erreurs à la compilation.} Une faute de
+        frappe sur un nom de colonne ou un mauvais type est signalée avant de
+        lancer un job qui tourne vingt minutes.
+  \item \textbf{C'est ce que demandent les offres.} Beaucoup d'équipes data
+        historiques sont en Scala ; savoir y écrire ouvre des portes que
+        PySpark seul n'ouvre pas.
+\end{enumerate}
+
+L'argument que je n'utilise \emph{pas} : « c'est plus rapide ». Depuis les
+DataFrames, PySpark et Scala passent par le même optimiseur Catalyst et les
+performances sont comparables. Le dire serait faux, et un bon recruteur le
+sait.
+\end{pourquoi}
+
+\subsection{Les trois transformations}
+
+\subsubsection{Déduplication par fenêtre}
+
+\begin{lstlisting}[style=sc]
+val fenetre = Window
+  .partitionBy(col("numero_dpe"))
+  .orderBy(
+    col("date_derniere_modification_dpe").desc_nulls_last,
+    col("date_reception_dpe").desc_nulls_last
+  )
+
+df.withColumn("_rang", row_number().over(fenetre))
+  .filter(col("_rang") === 1)
+  .drop("_rang")
+\end{lstlisting}
+
+\begin{attention}
+\titrebloc{Résultat mesuré : 0 ligne supprimée}
+J'attendais des milliers de doublons. Il n'y en a aucun — le numéro de DPE est
+réellement unique dans le lot ingéré. \textbf{J'ai gardé le code et documenté
+le résultat} plutôt que de le retirer : c'est un garde-fou qui protège une
+hypothèse, et savoir qu'elle tient a de la valeur.
+
+Si on me demande « pourquoi garder du code qui ne fait rien ? », la réponse
+est : il ne fait rien \emph{aujourd'hui}. Le jour où l'ADEME republie un
+diagnostic, il fera son travail.
+\end{attention}
+
+\subsubsection{Règles qualité avec motif conservé}
+
+\begin{lstlisting}[style=sc]
+private def motifRejet: Column =
+  when(col("numero_dpe").isNull, "identifiant_absent")
+    .when(!col("etiquette_dpe").isin(EtiquettesValides: _*), "etiquette_dpe_invalide")
+    .when(col("date_etablissement_dpe").isNull, "date_etablissement_absente")
+    .when(col("code_insee_ban").isNull, "commune_absente")
+    .when(col("surface_habitable_logement") <= 0, "surface_invalide")
+    // Un logement de plus de 1 000 m2 releve de la saisie erronee.
+    .when(col("surface_habitable_logement") > 1000, "surface_aberrante")
+    .when(col("conso_5_usages_par_m2_ep") < 0, "consommation_invalide")
+\end{lstlisting}
+
+\begin{pourquoi}
+\titrebloc{Pourquoi écrire les rejets au lieu de les jeter}
+\textbf{720 483 lignes} sont écartées. Si on se contentait d'un
+\cmd{filter}, elles disparaîtraient sans trace et personne ne saurait
+pourquoi le total ne tombe pas juste.
+
+Ici chaque rejet garde son motif et part dans \cmd{silver/dpe\_rejets}. On
+peut donc répondre à « combien de lignes perd-on, et pour quelle raison ? » —
+question que pose systématiquement un responsable data.
+\end{pourquoi}
+
+\subsubsection{Le seuil de géocodage, corrigé après mesure}
+
+\begin{lstlisting}[style=sc]
+val SeuilScoreBan: Double = 0.64  // mediane mesuree (etait 0.8 : 79 % marques)
+\end{lstlisting}
+
+\begin{attention}
+J'avais fixé le seuil à 0{,}8 « parce que ça semblait raisonnable ». Résultat :
+79 \% des lignes signalées comme douteuses — un filtre qui marque quatre lignes
+sur cinq ne filtre rien. J'ai regardé la distribution réelle, pris la médiane,
+et surtout basculé sur le \emph{statut} de géocodage fourni par la source,
+qui est un verdict et non un score.
+\end{attention}
+
+\newpage
+% ================================================================== %
+\section{Étape 3 — Entrepôt (PostgreSQL)}
+
+\subsection{Lancer}
+
+\begin{lstlisting}[style=sh]
+make warehouse    # silver -> PostgreSQL, fenêtre depuis 2024
+
+# Se connecter pour vérifier
+docker exec -it dpe_warehouse psql -U dpe -d dpe
+\end{lstlisting}
+
+\begin{lstlisting}[style=sql]
+-- Quelques requêtes de contrôle
+SELECT count(*) FROM silver.dpe_courant;        -- 7 849 191
+SELECT count(*) FROM silver.dpe_rejets;         --   720 483
+\d marts.*
+\end{lstlisting}
+
+\subsection{Pourquoi PostgreSQL et pas Snowflake ou BigQuery}
+
+\begin{pourquoi}
+\textbf{Parce que le volume ne le justifie pas.} 7,8 millions de lignes sur
+40 colonnes tiennent dans 2,7 Go. Un PostgreSQL sur un poste répond en
+quelques secondes. Payer un entrepôt cloud pour ça serait une dépense sans
+contrepartie.
+
+Ce que je dis ensuite, parce que c'est la vraie question : \textbf{à partir de
+quand je changerais}. Trois signaux — quand plusieurs équipes requêtent en
+concurrence, quand les volumes dépassent ce qu'une machine tient en mémoire,
+ou quand il faut séparer stockage et calcul pour maîtriser les coûts. Aucun
+n'est atteint ici.
+\end{pourquoi}
+
+\subsection{Deux optimisations concrètes}
+
+\begin{itemize}
+  \item \textbf{Projection de colonnes} : 40 colonnes chargées sur 78
+        disponibles. L'entrepôt passe de 5 825 Mo à 2 700 Mo. On ne charge que
+        ce que les marts consomment.
+  \item \textbf{Fenêtre temporelle} : seules les données depuis 2024 partent
+        en entrepôt. Le lac, lui, garde tout l'historique. C'est un arbitrage
+        coût de stockage contre profondeur d'analyse, assumé et documenté.
+\end{itemize}
+
+\newpage
+% ================================================================== %
+\section{Étape 4 — Modélisation (dbt)}
+
+\subsection{Lancer}
+
+\begin{lstlisting}[style=sh]
+cd dbt/dpe_analytics
+
+dbt deps                        # installe dbt_utils
+dbt seed --profiles-dir .       # charge le référentiel des départements
+dbt run  --profiles-dir .       # construit les modèles
+dbt test --profiles-dir .       # 44 tests de contrat
+dbt docs generate --profiles-dir .
+dbt docs serve --profiles-dir . --port 8081
+\end{lstlisting}
+
+\subsection{L'interface : le graphe de lignage}
+
+\cmd{dbt docs serve} ouvre une interface web sur
+\url{http://localhost:8081}. Deux choses à savoir montrer :
+
+\begin{enumerate}
+  \item \textbf{Le graphe de lignage} (bouton en bas à droite). Il affiche
+        automatiquement les dépendances entre modèles :
+        \cmd{stg\_dpe} $\rightarrow$ \cmd{fct\_dpe} et \cmd{dim\_commune}
+        $\rightarrow$ les trois marts. \textbf{Ce graphe n'est pas dessiné à la
+        main} : dbt le déduit des \cmd{ref()} dans le SQL.
+  \item \textbf{La fiche d'un modèle} : sa description, ses colonnes, ses
+        tests, et le SQL compilé. C'est la documentation qui ne peut pas
+        mentir, puisqu'elle est générée depuis le code.
+\end{enumerate}
+
+\subsection{Pourquoi dbt}
+
+\begin{pourquoi}
+\titrebloc{Ce que dbt apporte qu'un script SQL n'apporte pas}
+\begin{itemize}
+  \item \textbf{Le lignage gratuit.} On écrit \cmd{\{\{ ref('fct\_dpe') \}\}}
+        au lieu du nom de table ; dbt en déduit l'ordre d'exécution et le
+        graphe de dépendances.
+  \item \textbf{Les tests comme contrat.} Unicité, non-nullité, plages de
+        valeurs, cohérence arithmétique — déclarés en YAML à côté du modèle,
+        pas dans un script séparé qu'on oublie de lancer.
+  \item \textbf{La documentation versionnée.} Elle vit dans le dépôt et suit
+        le code.
+\end{itemize}
+\end{pourquoi}
+
+\subsection{Le piège de la moyenne de taux}
+
+\begin{lstlisting}[style=sql]
+-- CORRECT : rapport de sommes
+round(100.0 * sum(nb_passoires) / nullif(sum(nb_dpe), 0), 2) AS taux_passoires_pct
+
+-- FAUX : moyenne de taux, dès que les dénominateurs diffèrent
+avg(taux_passoires_pct)
+\end{lstlisting}
+
+\begin{attention}
+\titrebloc{À savoir expliquer par cœur}
+Une commune de 30 diagnostics et une préfecture de 40 000 ne pèsent pas
+pareil. Faire la moyenne de leurs taux donnerait autant de poids à l'une
+qu'à l'autre.
+
+C'est pour cette raison que \textbf{les taux sont des colonnes pré-calculées
+en SQL} et non des mesures Power BI : le modèle sémantique est en lecture
+seule, donc je ne peux pas y écrire de DAX. J'ai fait remonter le calcul dans
+dbt, où il est juste et testé.
+\end{attention}
+
+\subsection{Les deux tests rouges, assumés}
+
+\begin{pourquoi}
+Sur 44 tests dbt, 42 passent et 2 échouent. \textbf{Je les laisse en rouge.}
+
+Ils signalent un vrai doublon dans la source : l'ADEME a publié deux fois le
+même diagnostic, une version incomplète puis une version complète. Le test dit
+la vérité ; l'assouplir pour obtenir un tableau vert reviendrait à masquer un
+défaut réel.
+
+Si on me demande « pourquoi ne pas corriger ? » : parce que je n'ai pas encore
+tranché la cause racine, et qu'un correctif posé sans comprendre en
+créerait un autre. En attendant, le test documente le problème.
+\end{pourquoi}
+
+\newpage
+% ================================================================== %
+\section{Étape 5 — Orchestration (Airflow)}
+
+\subsection{Lancer}
+
+\begin{lstlisting}[style=sh]
+make up   # démarre webserver + scheduler
+# Interface : http://localhost:8080   (admin / admin)
+\end{lstlisting}
+
+\subsection{L'interface : ce qu'il faut savoir montrer}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Vue} & \textbf{Ce qu'elle apprend} \\
+\midrule
+\textbf{Grid}  & Historique des exécutions. Chaque carré est une tâche : vert réussi, rouge échoué. On lit d'un coup d'{\oe}il quelle étape casse et depuis quand. \\
+\textbf{Graph} & Le DAG lui-même, avec les dépendances. C'est la vue à ouvrir en entretien. \\
+\textbf{Logs}  & Sortie de chaque tâche. C'est là qu'on débogue. \\
+\textbf{Code}  & Le fichier Python du DAG, tel que le scheduler le lit. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Le DAG, en six lignes}
+
+\begin{lstlisting}[style=py]
+debut >> ingestion >> transformation >> chargement \
+      >> dbt_build >> dbt_test >> dbt_docs >> fin
+\end{lstlisting}
+
+Chaque tâche est un \cmd{BashOperator} qui soumet un travail dans le
+conteneur adéquat :
+
+\begin{lstlisting}[style=py]
+transformation = BashOperator(
+    task_id="spark_bronze_vers_silver",
+    bash_command=(
+        "docker exec dpe_spark spark-submit "
+        "--class fr.dpelab.silver.DpeSilverJob --master 'local[*]' "
+        f"--conf 'spark.local.dir={SPARK_DATA_ROOT}/tmp-spark' "
+        f"{SPARK_JAR} --bronze-path {SPARK_BRONZE}/dpe_existant ..."
+    ),
+)
+\end{lstlisting}
+
+\begin{pourquoi}
+\titrebloc{Pourquoi Airflow, et pas un cron}
+Un cron sait lancer une commande à une heure. Il ne sait pas :
+
+\begin{itemize}
+  \item \textbf{gérer les dépendances} — ne pas charger l'entrepôt si le
+        nettoyage a échoué ;
+  \item \textbf{rejouer une seule étape} sans refaire les précédentes ;
+  \item \textbf{montrer l'historique} : quelle exécution a échoué, quand,
+        avec quels logs.
+\end{itemize}
+
+C'est exactement ce qu'apporte Airflow, et c'est pourquoi il est devenu le
+standard de fait.
+\end{pourquoi}
+
+\begin{attention}
+\titrebloc{Pourquoi \cmd{docker exec} plutôt qu'un opérateur Spark}
+Airflow tourne dans son conteneur, Spark dans le sien. Plutôt que d'installer
+Spark dans l'image Airflow — ce qui la ferait grossir et mêlerait deux
+responsabilités — Airflow \emph{soumet} le travail au conteneur Spark. Chaque
+image reste spécialisée. En production on utiliserait le
+\cmd{SparkSubmitOperator} ou un cluster Kubernetes ; le principe est le même.
+\end{attention}
+
+\subsection{La fenêtre glissante}
+
+Le DAG ne rejoue pas les 15 millions de lignes chaque nuit : il traite une
+fenêtre glissante de trois mois. L'ADEME corrigeant parfois des diagnostics
+publiés, on repasse sur le passé récent sans tout refaire.
+
+\newpage
+% ================================================================== %
+\section{Étape 6 — Restitution (Power BI)}
+
+\subsection{Lancer}
+
+\begin{lstlisting}[style=sh]
+make powerbi-export   # exporte les marts en CSV
+
+# ou de façon ciblée
+python scripts/export_powerbi.py \
+  --table mart_performance_departement --destination powerbi/data
+
+git add powerbi/data && git commit && git push
+\end{lstlisting}
+
+\begin{attention}
+\titrebloc{Le rapport lit GitHub, pas votre machine}
+Faute de licence OneDrive pour téléverser un fichier, Power BI Service lit les
+CSV par leur \textbf{URL brute GitHub}. Conséquence directe :
+\textbf{l'actualisation dépend d'un \cmd{git push}}. C'est une limite du
+montage, pas un oubli — et il vaut mieux la dire soi-même que se la faire
+remarquer.
+\end{attention}
+
+\subsection{Les deux pièges Power BI, silencieux tous les deux}
+
+\begin{enumerate}
+  \item \textbf{Le délimiteur n'est pas détecté.} Tout atterrit dans une
+        colonne unique. Il faut le forcer à « Virgule ».
+  \item \textbf{L'auto-typage en locale française casse les décimaux.} Le CSV
+        écrit \cmd{8.69} avec un point, la locale attend une virgule, et Power
+        Query bascule la colonne en texte — latitude et longitude comprises,
+        ce qui vide la carte \emph{sans message d'erreur}.
+\end{enumerate}
+
+\begin{lstlisting}[style=sh]
+Table.TransformColumnTypes(#"En-têtes promus",
+  {{"code_departement", type text},
+   {"nb_dpe", Int64.Type},
+   {"taux_passoires_pct", type number},
+   {"latitude", type number}, {"longitude", type number}}, "en-US")
+\end{lstlisting}
+
+\begin{pourquoi}
+\titrebloc{Et le code département reste du texte}
+Typé en nombre, « 01 » perdrait son zéro initial et « 2A » ferait échouer la
+conversion. Le même piège existe côté dbt : le seed \cmd{ref\_departement}
+déclare ses types explicitement.
+\end{pourquoi}
+
+\subsection{Pourquoi la carte est départementale}
+
+\begin{pourquoi}
+La première version cartographiait les communes. À 23 628 communes
+géolocalisées, chaque point occupe moins d'un pixel : les cercles se
+recouvrent, plus rien n'est identifiable.
+
+J'ai essayé le rayon, l'opacité, la carte thermique. Aucun réglage ne corrige
+cela — \textbf{c'est le grain qui était en cause}, pas l'affichage. À 96
+départements, chaque bulle redevient lisible.
+
+C'est la leçon que je retiens : quand un visuel ne passe pas, il faut souvent
+remonter au modèle, pas régler le visuel.
+\end{pourquoi}
+
+\newpage
+% ================================================================== %
+\section{Les résultats à connaître}
+
+\subsection{Les quatre chiffres qui portent le projet}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Résultat} & \textbf{Ce qu'il dit} \\
+\midrule
+\textbf{8,69 \%} & Part de passoires (F ou G) dans le parc diagnostiqué, soit 681 719 logements \\
+\textbf{17,5 $\rightarrow$ 0,0 \%} & Part de passoires selon la période de construction, d'avant 1948 à après 2013 \\
+\textbf{Facteur 17} & Entre la Creuse (34,6 \%) et l'Hérault (2,1 \%) \\
+\textbf{6 € contre 50 €} & Coût annuel de chauffage au m², d'une étiquette A à une étiquette G \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Le résultat le plus fort}
+
+La chute après \textbf{1974} — année de la première réglementation thermique,
+adoptée dans la foulée du choc pétrolier. Avant 1948, 17,5 \% de passoires.
+Après 2013, 0,0 \%, et \textbf{60,3 \% des maisons neuves décrochent une
+étiquette A ou B}.
+
+C'est l'effet d'une politique publique, mesuré sur des données de terrain.
+
+\subsection{Les limites, à énoncer soi-même}
+
+\begin{attention}
+\titrebloc{Biais de sélection}
+Un DPE se réalise à la vente ou à la location. Ces 7,8 millions de lignes
+décrivent le parc \emph{qui change de mains}, pas le parc français. Les
+logements occupés durablement par leurs propriétaires sont sous-représentés —
+et ce sont souvent les plus anciens.
+\end{attention}
+
+\begin{attention}
+\titrebloc{Une corrélation qu'il ne faut pas surinterpréter}
+À l'échelle du logement, le type de bâtiment pèse : 14,5 \% de passoires pour
+les maisons contre 6,2 \% pour les appartements. Mais à l'échelle
+départementale, le lien s'effondre — \textbf{r = 0,31}, soit 9 \% de variance
+expliquée. L'agrégation dilue l'effet et le climat reprend le dessus.
+
+Le titre du visuel le dit ainsi, plutôt que de laisser croire à un lien fort.
+\end{attention}
+
+\newpage
+% ================================================================== %
+\section{Questions probables en entretien}
+
+\subsection{« Pourquoi Spark pour 15 millions de lignes ? Pandas suffirait. »}
+
+Non, et c'est mesurable : la déduplication brasse plus de 10 Go de
+\emph{shuffle}. Sur un poste à 16 Go de RAM, Pandas sature. Spark décharge sur
+disque et termine. J'ai d'ailleurs dû rediriger \cmd{spark.local.dir} vers le
+disque du lac, parce que les fichiers temporaires remplissaient le disque
+système.
+
+\subsection{« Comment garantissez-vous l'idempotence ? »}
+
+Trois mécanismes, un par couche :
+
+\begin{itemize}
+  \item \textbf{Ingestion} : promotion atomique par partition, avec manifeste
+        de complétude.
+  \item \textbf{Silver} : réécriture complète en
+        \cmd{partitionOverwriteMode=dynamic} — seules les partitions produites
+        sont remplacées.
+  \item \textbf{Entrepôt} : \cmd{SaveMode.Overwrite} avec
+        \cmd{truncate=true}, qui vide et recharge sans détruire les index.
+\end{itemize}
+
+Rejouer le DAG ne duplique rien.
+
+\subsection{« Qu'est-ce qui vous a le plus surpris ? »}
+
+Que \textbf{trois de mes hypothèses soient fausses}, et de façon mesurable :
+la déduplication ne supprime rien, les chaînes de remplacement représentent
+0,01 \% et non 8,9 \%, et mon seuil de géocodage marquait 79 \% des lignes.
+
+Je les ai documentées dans le README plutôt que de les effacer. Un pipeline
+qui ne raconte que ses succès n'apprend rien à celui qui le reprend.
+
+\subsection{« Que feriez-vous différemment ? »}
+
+Trois choses :
+
+\begin{enumerate}
+  \item \textbf{Intégrer l'export Power BI au DAG.} Il est aujourd'hui manuel
+        parce qu'il dépend d'un \cmd{git push} ; il faudrait un jeton
+        d'écriture dans l'orchestrateur.
+  \item \textbf{Trancher le doublon en silver.} Deux tests sont rouges et je
+        sais pourquoi, mais pas encore d'où vient le doublon exactement.
+  \item \textbf{Passer les marts en incrémental.} Aujourd'hui ils sont
+        reconstruits entièrement à chaque exécution ; à volume constant c'est
+        acceptable, mais ça ne passera pas l'échelle.
+\end{enumerate}
+
+\subsection{« Montrez-moi une décision technique que vous regrettez. »}
+
+Avoir fixé le seuil de géocodage à 0,8 sans regarder la distribution. C'était
+une valeur \emph{qui semblait raisonnable}, ce qui n'est pas un critère. La
+mesure a montré qu'elle marquait quatre lignes sur cinq. Depuis, je vérifie
+un seuil avant de l'écrire.
+
+\vfill
+\begin{center}
+\color{trait}\rule{0.4\textwidth}{0.8pt}\\[0.8em]
+\color{encre3}\small
+Document généré depuis le dépôt \cmd{dpe-lakehouse}.\\
+Les chiffres sont relevés en base, pas recopiés.
+\end{center}
+
+\end{document}
