@@ -405,9 +405,57 @@ h1{{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:72px;
 </body></html>"""
 
 
-for theme in ("clair", "sombre"):
-    (ICI / f"canvas-{theme}.html").write_text(page(theme))
-    print(f"canvas-{theme}.html écrit")
+# Sous garde : le module est aussi importé par le générateur portrait,
+# qui réutilise les icônes et l'embarquement des polices.
 
-print(f"\ngéométrie : {len(noeuds)} nœuds, {len(chemins)} fils, "
-      f"écart horizontal {ecart:.0f} px")
+
+# ── Rendu PNG ────────────────────────────────────────────────────────────
+def rendre(source: Path, cible: Path, largeur: int, hauteur: int) -> None:
+    """Capture la page avec Chrome headless, puis réduit à la taille cible.
+
+    Deux précautions :
+
+    1. La fenêtre est demandée plus haute que la page. Le viewport de Chrome
+       headless fait une centaine de pixels de moins que `--window-size`, et
+       tout ce qui dépasse n'est simplement pas peint — sans erreur, sans
+       barre de défilement. On rend donc large puis on recadre.
+    2. La capture se fait à l'échelle 2 et on rééchantillonne en Lanczos.
+       Le texte reste net sans livrer une image de 4800 px de large.
+    """
+    import subprocess, shutil
+
+    marge_viewport = 160
+    brut = cible.with_name(cible.stem + "-brut.png")
+    chrome = next((c for c in ("/opt/google/chrome/chrome", "google-chrome", "chromium")
+                   if shutil.which(c) or Path(c).exists()), None)
+    if chrome is None:
+        raise SystemExit("Chrome introuvable : impossible de rendre le PNG.")
+
+    subprocess.run([
+        chrome, "--headless", "--disable-gpu", "--no-sandbox", "--hide-scrollbars",
+        "--force-device-scale-factor=2",
+        f"--window-size={largeur},{hauteur + marge_viewport}",
+        "--virtual-time-budget=8000",
+        f"--screenshot={brut}", source.resolve().as_uri(),
+    ], check=True, capture_output=True)
+
+    subprocess.run([
+        "convert", str(brut),
+        "-crop", f"{largeur * 2}x{hauteur * 2}+0+0", "+repage",
+        "-filter", "Lanczos", "-resize", f"{largeur}x{hauteur}",
+        "-strip", str(cible),
+    ], check=True)
+    brut.unlink()
+    print(f"  {cible.name}  {largeur}x{hauteur}")
+
+
+if __name__ == "__main__":
+    sortie = ICI.parent / "docs" / "img"
+    sortie.mkdir(parents=True, exist_ok=True)
+    for theme in ("clair", "sombre"):
+        html = ICI / f"canvas-{theme}.html"
+        html.write_text(page(theme))
+        rendre(html, sortie / f"architecture-{theme}.png", LARGEUR, HAUTEUR)
+
+    print(f"\ngéométrie : {len(noeuds)} nœuds, {len(chemins)} fils, "
+          f"écart horizontal {ecart:.0f} px")
