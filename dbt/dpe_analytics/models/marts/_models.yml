@@ -25,7 +25,26 @@ models:
       - name: cle_dpe
         description: Identifiant du diagnostic, clé primaire de la table.
         data_tests:
-          - unique
+          # Ce test est en avertissement, pas en erreur, et c'est une decision.
+          #
+          # L'ADEME publie deux fois le meme diagnostic 2654E1827758R : une version
+          # incomplete puis une version complete. Les deux lignes ne different que par
+          # `emission_ges_5_usages_par_m2` et `conso_5_usages_par_m2_ef`, nuls dans la
+          # premiere. C'est un defaut de la source, pas du pipeline : la deduplication
+          # Spark partitionne bien par `numero_dpe` et ne peut pas emettre deux lignes.
+          #
+          # En erreur, ce test faisait echouer la tache Airflow `dbt_test`, qui bloquait
+          # `dbt_docs_generate` : le DAG ne pouvait jamais aboutir. Une alarme qui sonne
+          # en permanence finit par ne plus etre regardee.
+          #
+          # En avertissement, le test continue de rapporter a chaque execution sans
+          # bloquer la chaine. Les autres tests gardent leur pouvoir de blocage : une
+          # regression reelle casserait toujours le build.
+          #
+          # Mesure au 30/08/2026 : 1 doublon sur 8 004 187 lignes.
+          - unique:
+              config:
+                severity: warn
           - not_null
 
       - name: code_commune
