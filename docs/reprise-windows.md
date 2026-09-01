@@ -11,8 +11,7 @@ pour qu'elle démarre avec le contexte, ou à lire seul.
 de performance énergétique des logements.
 
 - **Source** : API ADEME Data Fair, jeu `dpe03existant`, accès libre
-- **Volumes** : 15,3 M de lignes ingérées, 8 004 187 en entrepôt après le
-  dernier run
+- **Volumes** : 15,3 M de lignes ingérées, 8 004 187 en entrepôt
 - **Chaîne** : ingestion Python → nettoyage Spark/Scala → PostgreSQL →
   modèles dbt → orchestration Airflow → restitution Power BI
 - **Dépôt** : `github.com/ebenezer-ngblogni/dpe-lakehouse`
@@ -32,22 +31,23 @@ dédoublonné, règles qualité), gold (marts agrégés pour la restitution).
   remplacement, règles qualité avec motif de rejet conservé
 - Entrepôt PostgreSQL : 40 colonnes projetées sur 78, fenêtre depuis 2024
 - Modèles dbt : schéma en étoile, agrégats commune et département, 44 tests
-- DAG Airflow à six tâches, exécuté de bout en bout avec succès
-  (6 min + 18 min + 4 min + 3 min)
 - Rapport Power BI Service : carte à 96 départements, classement, nuage de points
 - Deux pages web, un canevas d'architecture en PNG, un tutoriel PDF de 16 pages
+- **DAG vert de bout en bout**, le 1er septembre 2026 en ~50 min :
+  ingestion 18m22, Spark 21m57, entrepôt 5m11, dbt 3m19, tests 1m03.
+  Les deux tests d'unicité sont passés en `severity: warn` avec le motif
+  documenté dans le YAML — verdict PASS=42, WARN=2, ERROR=0.
 
 ### En suspens
 
-1. **`dbt_test` bloque le DAG.** Deux tests échouent sur un vrai doublon de la
-   source (l'ADEME a publié deux fois le même diagnostic, version incomplète
-   puis complète). Avec `retries: 2`, la tâche finit par échouer et
-   `dbt_docs_generate` ne tourne jamais. **Décision à prendre** : passer ces
-   deux tests en `severity: warn` avec commentaire, ou laisser rouge.
-2. **Le job Scala de la CI** échoue à l'étape « Set up job ». Le log demande
+1. **Le job Scala de la CI** échoue à l'étape « Set up job ». Le log demande
    les droits admin du dépôt.
-3. **`mart_profil_batiment`** est exporté mais pas encore exploité dans un
-   rapport. C'est lui qui porte le résultat le plus démonstratif.
+2. **`mart_profil_batiment`** est exporté mais pas encore exploité dans un
+   rapport. C'est lui qui porte le résultat le plus démonstratif — la rupture
+   de 1974.
+3. **L'export Power BI reste manuel.** Il n'est pas dans le DAG : après chaque
+   exécution il faut lancer `make powerbi-export` puis pousser, sinon le
+   rapport continue d'afficher les chiffres précédents.
 
 ---
 
